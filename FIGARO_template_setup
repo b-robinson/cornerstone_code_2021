@@ -6,3 +6,5 @@ python3 setup.py bdist_wheel
 pip3 install --force-reinstall dist/*.whl
 figaro -i /path/to/fastq/directory -o /path/to/output/files -a [amplicon length] \
     -f [forward primer length] -r [reverse primer length]
+# i ran the following
+python3 figaro.py -i /path/to/fastq/directory -o /path/to/output/files -a 450 -f 20 -r 20
