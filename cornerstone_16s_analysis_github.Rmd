@@ -1,0 +1,1643 @@
+---
+title: "cornerstone_16s_analysis_github"
+author: Benjamin Robinson
+output: html_notebook
+---
+
+```{r style, echo=FALSE, message=FALSE, warning=FALSE, results="asis"}
+library("BiocStyle")
+library("knitr")
+library("rmarkdown")
+options(width = 98) 
+opts_chunk$set(message = FALSE, error = FALSE, warning = FALSE,
+               cache = TRUE, fig.width = 8, fig.height = 7)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library("knitr")
+library("BiocStyle")
+.cran_packages <- c("ggplot2", "gridExtra")
+.bioc_packages <- c("dada2", "phyloseq", "DECIPHER", "phangorn")
+.inst <- .cran_packages %in% installed.packages()
+if(any(!.inst)) {
+   install.packages(.cran_packages[!.inst])
+}
+.inst <- .bioc_packages %in% installed.packages()
+if(any(!.inst)) {
+   source("http://bioconductor.org/biocLite.R")
+   biocLite(.bioc_packages[!.inst], ask = F)
+}
+# Load packages into session, and print package version
+sapply(c(.cran_packages, .bioc_packages), require, character.only = TRUE)
+set.seed(100)
+```
+
+```{r, message=FALSE, warning=FALSE}
+detach("package:phangorn", unload=TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+## Setup
+### Bioconductor and CRAN libraries used
+#library(phyloseq)
+library(vegan)
+library(DESeq2)
+library(tidyverse)
+library(RColorBrewer)
+library(pheatmap)
+#library(ggplot2)
+library(ggrepel)
+library(dendextend)
+library(viridis)
+library(reshape)
+library(microbiome)
+```
+
+```{r}
+ps <- readRDS("C:/Users/benja/Desktop/cornerstone_files/ps.RDS")
+ps
+```
+
+```{r}
+otu_table <- as.data.frame(otu_table(ps))
+phy_tree <- phy_tree(ps)
+```
+
+```{r}
+tax_table <- as.matrix(read.table("C:/Users/benja/Desktop/cornerstone_files/dnas_taxonomy.tsv", header=T,
+           row.names=1, check.names=F, sep="\t"))
+```
+
+```{r}
+count_tab <- read.table("C:/Users/benja/Desktop/cornerstone_files/ASVs_counts.tsv", header=T, row.names=1,
+             check.names=F, sep="\t")
+```
+
+```{r}
+tax_tab <- as.matrix(read.table("C:/Users/benja/Desktop/cornerstone_files/ASVs_taxonomy.tsv", header=T,
+           row.names=1, check.names=F, sep="\t"))
+
+```
+
+```{r}
+sample_info_tab <- read.table("C:/Users/benja/Desktop/cornerstone_files/meta.tsv", header=T, row.names=1,
+                   check.names=F, sep="\t")
+
+```
+
+  # and setting the color column to be of type "character", which helps later
+```{r}
+sample_info_tab$color <- as.character(sample_info_tab$color)
+```
+  
+```{r}
+sample_info_tab # to take a peek
+```
+
+```{r, message=FALSE, warning=FALSE}
+ps.dna <- phyloseq(otu_table(otu_table, taxa_are_rows=FALSE), 
+               sample_data(sample_info_tab), 
+               tax_table(tax_table), phy_tree(phy_tree))
+ps.dna
+```
+
+```{r}
+ps.asv <- phyloseq(otu_table(count_tab, taxa_are_rows=TRUE), 
+               sample_data(sample_info_tab), 
+               tax_table(tax_tab))
+ps.asv
+```
+Filtering {#filtering .unnumbered}
+----------------------------------
+
+```{r taxfilter0}
+# Show available ranks in the dataset
+rank_names(ps.dna)
+rank_names(ps.asv)
+# Create table, number of features for each phyla
+table(tax_table(ps.dna)[, "Kingdom"], exclude = NULL)
+table(tax_table(ps.asv)[, "Kingdom"], exclude = NULL)
+```
+
+```{r removeNAphyla, message=FALSE, warning=FALSE}
+ps.dna <- subset_taxa(ps.dna, !is.na(Kingdom) & !Kingdom %in% c("", "uncharacterized", "Archaea", "Eukaryota"))
+ps.asv <- subset_taxa(ps.asv, !is.na(Kingdom) & !Kingdom %in% c("", "uncharacterized", "Archaea", "Eukaryota"))
+```
+
+```{r}
+table(tax_table(ps.dna)[, "Phylum"], exclude = NULL)
+table(tax_table(ps.asv)[, "Phylum"], exclude = NULL)
+```
+
+```{r, message=FALSE, warning=FALSE}
+ps.dna <- subset_taxa(ps.dna, !is.na(Phylum) & !Phylum %in% c("", "uncharacterized"))
+ps.asv <- subset_taxa(ps.asv, !is.na(Phylum) & !Phylum %in% c("", "uncharacterized"))
+ps.dna
+ps.asv
+#saveRDS(ps.dna, "C:/Users/Ben/Desktop/ps_dna.rds")
+#saveRDS(ps.asv, "C:/Users/Ben/Desktop/ps_asv.rds")
+```
+
+```{r}
+summarize_phyloseq(ps.asv)
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(microbiome)
+library(philr); packageVersion("philr")
+library(phyloseq); packageVersion("phyloseq")
+library(ape); packageVersion("ape")
+library(ggplot2); packageVersion("ggplot2")
+```
+
+```{r}
+Paired <- brewer.pal(12, "Paired") #need the number of colors in palate of choice, plus its color brewer name
+Paired_range <- colorRampPalette(Paired, space = "Lab") #function that extends it
+
+Dark2 <- brewer.pal(8, "Dark2")
+Dark2_range <- colorRampPalette(Dark2)
+
+Set3 <- brewer.pal(12, "Set3")
+Set3_range <- colorRampPalette(Set3, space = "Lab")
+
+Spectral <- brewer.pal(11, "Spectral")
+Spectral_range <- colorRampPalette(Spectral)
+```
+------------------------------------------------------
+Bar plots true
+
+#Overall/trial run
+```{r}
+ps.t<-transform_sample_counts(ps.asv,function(x)x/sum(x))
+ps.melt <- (psmelt(ps.t))
+ps.melt1 <- ps.melt
+ps.melt2 <- ps.melt
+ps.melt3 <- ps.melt
+ps.melt4 <- ps.melt
+ps.melt5 <- ps.melt
+#below is the absolutely digusting manner by which I was able to merge taxa into an "other" group strictly for visualization purposes. I specifically did this on the melt object only, since this is only used for ggplot bargraphs in this workflow. no stats were or should be run on data after doing this
+#ps.melt$Species[ps.melt$Abundance < 0.01] <- "< 1% abund."
+
+ps.melt$Species[((ps.melt$Species != "Streptococcus_thermophilus"))&
+                   ((ps.melt$Species != "Lactobacillus_delbrueckii"))&
+                   ((ps.melt$Species != "Brevibacterium_aurantiacum"))&
+                   ((ps.melt$Species != "Corynebacterium_ASV0004"))&
+                   ((ps.melt$Species != "Staphylococcus_equorum"))&
+                   ((ps.melt$Species != "Corynebacterium_ASV0007"))&
+                   ((ps.melt$Species != "Marinilactibacillus_psychrotolerans"))&
+                   ((ps.melt$Species != "Corynebacterium_Genus"))&
+                   ((ps.melt$Species != "Psychrobacter_celer"))&
+                   ((ps.melt$Species != "Brachybacterium_Species"))&
+                   ((ps.melt$Species != "Brachybacterium_tyrofermentans"))&
+                   ((ps.melt$Species != "Corynebacterium_ASV0020"))&
+                   ((ps.melt$Species != "Corynebacterium_glyciniphilum"))&
+                   ((ps.melt$Species != "Nocardiopsaceae_Family"))&
+                   ((ps.melt$Species != "Brevibacterium_ASV0038"))&
+                   ((ps.melt$Species != "Staphylococcus_ASV0019"))&
+                   ((ps.melt$Species != "Brevibacterium_ASV0011"))&
+                   ((ps.melt$Species != "Facklamia_tabacinasalis"))&
+                   ((ps.melt$Species != "Lactobacillus_sakei"))&
+                   ((ps.melt$Species != "Lactobacillus_ASV0008"))&
+                   ((ps.melt$Species != "Lactobacillus_ASV0014"))&
+                   ((ps.melt$Species != "Lactobacillus_ASV0091"))&
+                   ((ps.melt$Species != "Leuconostoc_ASV0052"))&
+                   ((ps.melt$Species != "Leuconostoc_ASV0056"))&
+                   ((ps.melt$Species != "Lactobacillus_ASV0026"))&
+                   ((ps.melt$Species != "Dubosiella_newyorkensis"))&
+                   ((ps.melt$Species != "Vibrio_variabilis"))&
+                   ((ps.melt$Species != "Ralstonia_insidiosa"))&
+                   ((ps.melt$Species != "Bacteroidales_Order"))&
+                   ((ps.melt$Species != "Bacteroides_thetaiotaomicron"))&
+                   ((ps.melt$Species != "Vibrio_Genus"))&
+                   ((ps.melt$Species != "Enterobacteriaceae_Family"))&
+                   ((ps.melt$Species != "Halomonas_variabilis"))
+                ] <- "All Others"
+ps.melt
+
+ps.melt$category2.ord <- factor(ps.melt$category2, levels = c("Milk","NMS","Milk+NMS", "Coagulant", "Curd", "Maker", "Form", "Cloth", "Table", "Fan", "Shelf",  "Paste_D1", "Rind_D1", "Paste_D60", "Rind_D60", "Paste_D120", "Rind_D120", "Paste_D180", "Rind_D180", "Floor", "Drain"))
+
+taxa.col <- c(
+       "All Others"="grey", 
+     "Bacteroidales_Order"="plum",
+     "Bacteroides_thetaiotaomicron"="plum4",
+     "Brachybacterium_Species"="red2", 
+     "Brachybacterium_tyrofermentans"="red4", 
+     "Brevibacterium_ASV0011"="deepskyblue", 
+     "Brevibacterium_ASV0038"="deepskyblue3", 
+     "Brevibacterium_aurantiacum"="deepskyblue4", 
+     "Corynebacterium_ASV0004"="gold",
+     "Corynebacterium_ASV0007"="gold3",
+     "Corynebacterium_ASV0020"="gold4",
+     "Corynebacterium_Genus" = "goldenrod",
+     "Corynebacterium_glyciniphilum"="darkgoldenrod",
+     "Dubosiella_newyorkensis"="darkorange",
+     "Enterobacteriaceae_Family"="orange",
+     "Facklamia_tabacinasalis"="thistle", 
+     "Halomonas_variabilis"="violetred", 
+     "Lactobacillus_ASV0008"="mediumorchid2", 
+     "Lactobacillus_ASV0014"= "darkorchid3", 
+     "Lactobacillus_ASV0026"="mediumpurple2",
+     "Lactobacillus_ASV0091"="darkmagenta", 
+     "Lactobacillus_delbrueckii"="purple4",
+     "Lactobacillus_sakei" = "magenta4", 
+     "Leuconostoc_ASV0052"="cadetblue2", 
+     "Leuconostoc_ASV0056"="cadetblue4", 
+     "Marinilactibacillus_psychrotolerans"="burlywood",
+     "Nocardiopsaceae_Family"="orange2", 
+     "Psychrobacter_celer"="midnightblue",
+     "Ralstonia_insidiosa"="brown3",
+     "Staphylococcus_ASV0019"="olivedrab3",
+     "Staphylococcus_equorum"="green4",
+     "Streptococcus_thermophilus"="salmon",
+     "Vibrio_Genus"="darkorange2",
+     "Vibrio_variabilis"="orange4"
+     ) 
+```
+
+```{r, fig.height=11, fig.width=30}
+ggplot(ps.melt, aes(x=tag2, y = Abundance, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(vjust=0.5, angle = 270),legend.position = "right",axis.title.x =element_blank() ,panel.background = element_blank(), panel.grid=element_blank(), axis.line=element_line('black')) +
+  theme(text=element_text(size=16)) +
+  guides(fill = guide_legend(ncol=1)) +  
+  ylab("Relative Abundance (%) \n") + 
+  facet_grid(.~category2.ord,switch = "both", scales = "free", space = "free") + 
+  scale_fill_manual(values = taxa.col)
+```
+#Make Day Graph True
+```{r}
+ps.melt1 <- subset(ps.melt1, category == "RawMilk"|category == "NMS"|category == "Milk+NMS"|category == "Coagulant"|category == "Curd")
+ps.melt1$category.ord <- factor(ps.melt1$category, levels = c("RawMilk","NMS","Milk+NMS", "Coagulant", "Curd"))
+ps.melt1$Species[ps.melt1$Abundance < 0.01] <- "< 1% abund."
+ps.melt1$Species[((ps.melt1$Species != "Dubosiella_newyorkensis"))&
+                   ((ps.melt1$Species != "Streptococcus_thermophilus"))&
+                   ((ps.melt1$Species != "Lactobacillus_delbrueckii"))&
+                   ((ps.melt1$Species != "Vibrio_variabilis"))&
+                   ((ps.melt1$Species != "Ralstonia_insidiosa"))&
+                   ((ps.melt1$Species != "Bacteroidales_Order"))&
+                   ((ps.melt1$Species != "Bacteroides_thetaiotaomicron"))&
+                   ((ps.melt1$Species != "Vibrio_Genus"))&
+                   ((ps.melt1$Species != "Enterobacteriaceae_Family"))&
+                   ((ps.melt1$Species != "< 1% abund."))
+                ] <- "All Others"
+ps.melt1
+
+ps.melt1$Species <- factor(ps.melt1$Species, levels = c("All Others", "< 1% abund.", "Bacteroidales_Order", "Bacteroides_thetaiotaomicron", "Dubosiella_newyorkensis", "Enterobacteriaceae_Family", "Lactobacillus_delbrueckii", "Ralstonia_insidiosa", "Streptococcus_thermophilus", "Vibrio_Genus", "Vibrio_variabilis")) 
+
+```
+
+```{r}
+taxa.col1 <- c(
+       "All Others"="grey", 
+       "< 1% abund."="antiquewhite",
+     "Bacteroidales_Order"="plum",
+     "Bacteroides_thetaiotaomicron"="plum4",
+     "Brachybacterium_Species"="red2", 
+     "Brachybacterium_tyrofermentans"="red4", 
+     "Brevibacterium_ASV0011"="deepskyblue", 
+     "Brevibacterium_ASV0038"="deepskyblue3", 
+     "Brevibacterium_aurantiacum"="deepskyblue4", 
+     "Corynebacterium_ASV0004"="gold",
+     "Corynebacterium_ASV0007"="gold3",
+     "Corynebacterium_ASV0020"="gold4",
+     "Corynebacterium_Genus" = "goldenrod",
+     "Corynebacterium_glyciniphilum"="darkgoldenrod",
+     "Dubosiella_newyorkensis"="darkorange",
+     "Enterobacteriaceae_Family"="orange",
+     "Facklamia_tabacinasalis"="thistle", 
+     "Halomonas_variabilis"="violetred", 
+     "Lactobacillus_ASV0008"="mediumorchid2", 
+     "Lactobacillus_ASV0014"= "darkorchid3", 
+     "Lactobacillus_ASV0026"="mediumpurple2",
+     "Lactobacillus_ASV0091"="darkmagenta", 
+     "Lactobacillus_delbrueckii"="purple4",
+     "Lactobacillus_sakei" = "magenta4", 
+     "Leuconostoc_ASV0052"="cadetblue2", 
+     "Leuconostoc_ASV0056"="cadetblue4", 
+     "Marinilactibacillus_psychrotolerans"="burlywood",
+     "Nocardiopsaceae_Family"="orange2", 
+     "Psychrobacter_celer"="midnightblue",
+     "Ralstonia_insidiosa"="brown3",
+     "Staphylococcus_ASV0019"="olivedrab3",
+     "Staphylococcus_equorum"="green4",
+     "Streptococcus_thermophilus"="salmon",
+     "Vibrio_Genus"="darkorange2",
+     "Vibrio_variabilis"="orange4"
+     ) 
+```
+
+```{r, fig.height=6, fig.width=13.5}
+ggplot(ps.melt1, aes(x=category.ord, y = Abundance, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(vjust=0.5, angle = 270),legend.position = "right",axis.title.x =element_blank() ,panel.background = element_blank(), panel.grid=element_blank(), axis.line=element_blank()) +
+  theme(text=element_text(size=15)) +
+  guides(fill = guide_legend(ncol=1)) +  
+  ylab("Relative Abundance (%) \n") + 
+  facet_grid(.~facility,switch = "both", scales = "free", space = "free") + 
+  scale_fill_manual(values = taxa.col1)
+```
+#Paste Graph True
+```{r}
+ps.melt2 <- subset(ps.melt2, category == "Paste")
+ps.melt2$day.ord <- factor(ps.melt2$day, levels = c("1","60","120", "180"))
+#ps.melt2$Species[ps.melt2$Abundance < 0.01] <- "< 1% abund."
+ps.melt2$Species[((ps.melt2$Species != "Streptococcus_thermophilus"))&
+                   ((ps.melt2$Species != "Lactobacillus_delbrueckii"))&
+                   ((ps.melt2$Species != "Lactobacillus_ASV0008"))&
+                   ((ps.melt2$Species != "Lactobacillus_ASV0014"))&
+                   ((ps.melt2$Species != "Brevibacterium_aurantiacum"))&
+                   ((ps.melt2$Species != "Staphylococcus_ASV0019"))&
+                   ((ps.melt2$Species != "Staphylococcus_equorum"))&
+                   ((ps.melt2$Species != "Lactobacillus_ASV0091"))&
+                   ((ps.melt2$Species != "Brachybacterium_Species"))&
+                   ((ps.melt2$Species != "Marinilactibacillus_psychrotolerans"))&
+                   ((ps.melt2$Species != "Leuconostoc_ASV0052"))&
+                   ((ps.melt2$Species != "Leuconostoc_ASV0056"))&
+                   ((ps.melt2$Species != "Corynebacterium_ASV0007"))&
+                   ((ps.melt2$Species != "Lactobacillus_ASV0026"))&
+                   ((ps.melt2$Species != "Psychrobacter_celer"))&
+                   ((ps.melt2$Species != "Corynebacterium_ASV0004"))
+                ] <- "All Others"
+ps.melt2
+
+```
+
+```{r}
+ taxa.col2 <- c(
+     "All Others"="grey", 
+     "Bacteroidales_Order"="plum",
+     "Bacteroides_thetaiotaomicron"="plum4",
+     "Brachybacterium_Species"="red2", 
+     "Brachybacterium_tyrofermentans"="red4", 
+     "Brevibacterium_ASV0011"="deepskyblue", 
+     "Brevibacterium_ASV0038"="deepskyblue3", 
+     "Brevibacterium_aurantiacum"="deepskyblue4", 
+     "Corynebacterium_ASV0004"="gold",
+     "Corynebacterium_ASV0007"="gold3",
+     "Corynebacterium_ASV0020"="gold4",
+     "Corynebacterium_Genus" = "goldenrod",
+     "Corynebacterium_glyciniphilum"="darkgoldenrod",
+     "Dubosiella_newyorkensis"="darkorange",
+     "Enterobacteriaceae_Family"="orange",
+     "Facklamia_tabacinasalis"="thistle", 
+     "Halomonas_variabilis"="violetred", 
+     "Lactobacillus_ASV0008"="mediumorchid2", 
+     "Lactobacillus_ASV0014"= "darkorchid3", 
+     "Lactobacillus_ASV0026"="mediumpurple2",
+     "Lactobacillus_ASV0091"="darkmagenta", 
+     "Lactobacillus_delbrueckii"="purple4",
+     "Lactobacillus_sakei" = "magenta4", 
+     "Leuconostoc_ASV0052"="cadetblue2", 
+     "Leuconostoc_ASV0056"="cadetblue4", 
+     "Marinilactibacillus_psychrotolerans"="burlywood",
+     "Nocardiopsaceae_Family"="orange2", 
+     "Psychrobacter_celer"="midnightblue",
+     "Ralstonia_insidiosa"="brown3",
+     "Staphylococcus_ASV0019"="olivedrab3",
+     "Staphylococcus_equorum"="green4",
+     "Streptococcus_thermophilus"="salmon",
+     "Vibrio_Genus"="darkorange2",
+     "Vibrio_variabilis"="orange4"
+     ) 
+
+```
+
+```{r, fig.height=6.5, fig.width=12.5}
+aa <- ggplot(ps.melt2, aes(x=day.ord, y = Abundance, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(vjust=0.5, angle = 270),legend.position = "right",axis.title.x =element_blank() ,panel.background = element_blank(), panel.grid=element_blank(), axis.line=element_line('black')) +
+  theme(text=element_text(size=15)) +
+  guides(fill = guide_legend(ncol=1)) +  
+  ylab("Relative Abundance (%) \n") + 
+  facet_grid(.~location,switch = "both", scales = "free", space = "free") + 
+  scale_fill_manual(values = taxa.col2)
+aa
+```
+#Rind Graph True
+```{r}
+ps.melt3 <- subset(ps.melt3, category == "Rind")
+ps.melt3$day.ord <- factor(ps.melt3$day, levels = c("1","60","120", "180"))
+#ps.melt3$Species[ps.melt3$Abundance < 0.01] <- "< 1% abund."
+ps.melt3$Species[((ps.melt3$Species != "Streptococcus_thermophilus"))&
+                   ((ps.melt3$Species != "Lactobacillus_delbrueckii"))&
+                   ((ps.melt3$Species != "Brevibacterium_aurantiacum"))&
+                   ((ps.melt3$Species != "Corynebacterium_ASV0004"))&
+                   ((ps.melt3$Species != "Staphylococcus_equorum"))&
+                   ((ps.melt3$Species != "Corynebacterium_ASV0007"))&
+                   ((ps.melt3$Species != "Marinilactibacillus_psychrotolerans"))&
+                   ((ps.melt3$Species != "Corynebacterium_Genus"))&
+                   ((ps.melt3$Species != "Psychrobacter_celer"))&
+                   ((ps.melt3$Species != "Brachybacterium_Species"))&
+                   ((ps.melt3$Species != "Brachybacterium_tyrofermentans"))&
+                   ((ps.melt3$Species != "Corynebacterium_ASV0020"))&
+                   ((ps.melt3$Species != "Corynebacterium_glyciniphilum"))&
+                   ((ps.melt3$Species != "Nocardiopsaceae_Family"))&
+                   ((ps.melt3$Species != "Brevibacterium_ASV0038"))&
+                   ((ps.melt3$Species != "Staphylococcus_ASV0019"))&
+                   ((ps.melt3$Species != "Brevibacterium_ASV0011"))&
+                   ((ps.melt3$Species != "Facklamia_tabacinasalis"))&
+                   ((ps.melt3$Species != "Lactobacillus_sakei"))&
+                   ((ps.melt3$Species != "Halomonas_variabilis"))#&
+                   #((ps.melt$Species != "< 1% abund."))
+                ] <- "All Others"
+ps.melt3
+
+```
+
+```{r}
+ taxa.col3 <- c(
+      "All Others"="grey", 
+     "Bacteroidales_Order"="plum",
+     "Bacteroides_thetaiotaomicron"="plum4",
+     "Brachybacterium_Species"="red", 
+     "Brachybacterium_tyrofermentans"="red3", 
+     "Brevibacterium_ASV0011"="deepskyblue", 
+     "Brevibacterium_ASV0038"="deepskyblue3", 
+     "Brevibacterium_aurantiacum"="deepskyblue4", 
+     "Corynebacterium_ASV0004"="gold",
+     "Corynebacterium_ASV0007"="gold3",
+     "Corynebacterium_ASV0020"="gold4",
+     "Corynebacterium_Genus" = "goldenrod",
+     "Corynebacterium_glyciniphilum"="darkgoldenrod",
+     "Dubosiella_newyorkensis"="darkorange",
+     "Enterobacteriaceae_Family"="orange",
+     "Facklamia_tabacinasalis"="thistle", 
+     "Halomonas_variabilis"="violetred", 
+     "Lactobacillus_ASV0008"="mediumorchid2", 
+     "Lactobacillus_ASV0014"= "darkorchid3", 
+     "Lactobacillus_ASV0026"="mediumpurple2",
+     "Lactobacillus_ASV0091"="darkmagenta", 
+     "Lactobacillus_delbrueckii"="purple4",
+     "Lactobacillus_sakei" = "magenta4", 
+     "Leuconostoc_ASV0052"="cadetblue2", 
+     "Leuconostoc_ASV0056"="cadetblue4", 
+     "Marinilactibacillus_psychrotolerans"="burlywood",
+     "Nocardiopsaceae_Family"="orange2", 
+     "Psychrobacter_celer"="midnightblue",
+     "Ralstonia_insidiosa"="brown3",
+     "Staphylococcus_ASV0019"="olivedrab3",
+     "Staphylococcus_equorum"="green4",
+     "Streptococcus_thermophilus"="salmon",
+     "Vibrio_Genus"="darkorange2",
+     "Vibrio_variabilis"="orange4"
+     ) 
+
+```
+
+
+```{r, fig.height=6.5, fig.width=13}
+bb <- ggplot(ps.melt3, aes(x=day.ord, y = Abundance, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(vjust=0.5, angle = 270),legend.position = "right",axis.title.x =element_blank() ,panel.background = element_blank(), panel.grid=element_blank(), axis.line=element_line('black')) + 
+  theme(text=element_text(size=15)) +
+  guides(fill = guide_legend(ncol=1)) +  
+  ylab("Relative Abundance (%) \n") + 
+  facet_grid(.~location,switch = "both", scales = "free", space = "free") + 
+  scale_fill_manual(values = taxa.col3)
+bb
+```
+```{r, fig.height=12, fig.width=18}
+cc <- cowplot::plot_grid(aa, bb, nrow = 2, ncol = 1, scale = c(1,1), labels = c("A", "B"))
+#dd <- cowplot::plot_grid(aa, bb, zz, nrow = 3, ncol = 1, scale = c(.9,.9, .9), labels = c("A1", "A2", "B"))
+cc
+#dd
+```
+
+#Environment Bar Graph True
+```{r}
+ps.melt4 <- subset(ps.melt4, category == "Fan"|category == "Maker"|category == "Form"|category == "Shelf"|category == "Table")
+ps.melt4$category.ord <- factor(ps.melt4$category, levels = c("Shelf","Fan","Form", "Maker", "Table"))
+#ps.melt4$Species[ps.melt4$Abundance < 0.01] <- "< 1% abund."
+ps.melt4$Species[((ps.melt4$Species != "Streptococcus_thermophilus"))&
+                 ((ps.melt4$Species != "Lactobacillus_delbrueckii"))&
+                 ((ps.melt4$Species != "Brevibacterium_aurantiacum"))&
+                 ((ps.melt4$Species != "Corynebacterium_ASV0004"))&
+                 ((ps.melt4$Species != "Staphylococcus_equorum"))&
+                 ((ps.melt4$Species != "Corynebacterium_ASV0007"))&
+                 ((ps.melt4$Species != "Marinilactibacillus_psychrotolerans"))&
+                 ((ps.melt4$Species != "Corynebacterium_Genus"))&
+                 ((ps.melt4$Species != "Psychrobacter_celer"))&
+                 ((ps.melt4$Species != "Brachybacterium_Species"))&
+                 ((ps.melt4$Species != "Brachybacterium_tyrofermentans"))&
+                 ((ps.melt4$Species != "Corynebacterium_ASV0020"))&
+                 ((ps.melt4$Species != "Corynebacterium_glyciniphilum"))&
+                 ((ps.melt4$Species != "Nocardiopsaceae_Family"))&
+                 ((ps.melt4$Species != "Brevibacterium_ASV0038"))&
+                 ((ps.melt4$Species != "Staphylococcus_ASV0019"))&
+                 ((ps.melt4$Species != "Brevibacterium_ASV0011"))&
+                 ((ps.melt4$Species != "Facklamia_tabacinasalis"))&
+                 ((ps.melt4$Species != "Lactobacillus_sakei"))&
+                 ((ps.melt4$Species != "Lactobacillus_ASV0008"))&
+                 ((ps.melt4$Species != "Lactobacillus_ASV0014"))&
+                 ((ps.melt4$Species != "Lactobacillus_ASV0091"))&
+                 ((ps.melt4$Species != "Leuconostoc_ASV0052"))&
+                 ((ps.melt4$Species != "Leuconostoc_ASV0056"))&
+                 ((ps.melt4$Species != "Lactobacillus_ASV0026"))#&
+                #((ps.melt4$Species != "Dubosiella_newyorkensis"))&
+                #((ps.melt4$Species != "Vibrio_variabilis"))&
+                #((ps.melt4$Species != "Ralstonia_insidiosa"))&
+                #((ps.melt4$Species != "Bacteroidales_Order"))&
+                #((ps.melt4$Species != "Bacteroides_thetaiotaomicron"))&
+                #((ps.melt4$Species != "Vibrio_Genus"))&
+                #((ps.melt4$Species != "Enterobacteriaceae_Family"))&
+                #((ps.melt4$Species != "Halomonas_variabilis"))
+                ] <- "All Others"
+ps.melt4
+taxa.col4 <- c(
+     "All Others"="grey", 
+     "Bacteroidales_Order"="plum",
+     "Bacteroides_thetaiotaomicron"="plum4",
+     "Brachybacterium_Species"="red2", 
+     "Brachybacterium_tyrofermentans"="red4", 
+     "Brevibacterium_ASV0011"="deepskyblue", 
+     "Brevibacterium_ASV0038"="deepskyblue3", 
+     "Brevibacterium_aurantiacum"="deepskyblue4", 
+     "Corynebacterium_ASV0004"="gold",
+     "Corynebacterium_ASV0007"="gold3",
+     "Corynebacterium_ASV0020"="gold4",
+     "Corynebacterium_Genus" = "goldenrod",
+     "Corynebacterium_glyciniphilum"="darkgoldenrod",
+     "Dubosiella_newyorkensis"="darkorange",
+     "Enterobacteriaceae_Family"="orange",
+     "Facklamia_tabacinasalis"="thistle", 
+     "Halomonas_variabilis"="violetred", 
+     "Lactobacillus_ASV0008"="mediumorchid2", 
+     "Lactobacillus_ASV0014"= "darkorchid3", 
+     "Lactobacillus_ASV0026"="mediumpurple2",
+     "Lactobacillus_ASV0091"="darkmagenta", 
+     "Lactobacillus_delbrueckii"="purple4",
+     "Lactobacillus_sakei" = "magenta4", 
+     "Leuconostoc_ASV0052"="cadetblue2", 
+     "Leuconostoc_ASV0056"="cadetblue4", 
+     "Marinilactibacillus_psychrotolerans"="burlywood",
+     "Nocardiopsaceae_Family"="orange2", 
+     "Psychrobacter_celer"="midnightblue",
+     "Ralstonia_insidiosa"="brown3",
+     "Staphylococcus_ASV0019"="olivedrab3",
+     "Staphylococcus_equorum"="green4",
+     "Streptococcus_thermophilus"="salmon",
+     "Vibrio_Genus"="darkorange2",
+     "Vibrio_variabilis"="orange4"
+     ) 
+
+```
+
+```{r, fig.height=8, fig.width=13.5}
+zz<- ggplot(ps.melt4, aes(x=category.ord, y = Abundance, fill = Species)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(vjust=0.5, angle = 270),legend.position = "none",axis.title.x =element_blank() ,panel.background = element_blank(), panel.grid=element_blank(), axis.line=element_line('black')) + 
+  guides(fill = guide_legend(ncol=1)) +
+    theme(text=element_text(size=15)) +
+  ylab("Relative Abundance (%) \n") + 
+  facet_grid(.~facility,switch = "both", scales = "free", space = "free") + 
+  scale_fill_manual(values = taxa.col4)
+zz
+```
+
+```{r, fig.height=8, fig.width=11}
+xx <- cowplot::plot_grid(zz, yy, nrow = 2, ncol = 1, scale = .9, labels = c("A", "B"))
+xx
+```
+
+
+--------------------------------------------------------------------------------------------------------
+Paste Beta Diversity Stats True
+
+#make facility
+```{r}
+#CLR
+ps.paste <- subset_samples(ps.asv, category == "Paste")
+ps_clr_paste <- microbiome::transform(ps.paste, "clr")
+#PCA via phyloseq
+ord_clr_paste <- phyloseq::ordinate(ps_clr_paste, "RDA")
+#Plot scree plot
+phyloseq::plot_scree(ord_clr_paste) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+#Examine eigenvalues and % prop. variance explained
+head(ord_clr_paste$CA$eig) 
+sapply(ord_clr_paste$CA$eig[1:5], function(x) x / sum(ord_clr_paste$CA$eig))     
+#Plot ordination
+clr1 <- ord_clr_paste$CA$eig[1] / sum(ord_clr_paste$CA$eig)
+clr2 <- ord_clr_paste$CA$eig[2] / sum(ord_clr_paste$CA$eig)
+ait_make <- phyloseq::plot_ordination(ps_clr_paste, ord_clr_paste, type="samples", color="makefacility", shape = "agingfacility", label = "day") + 
+  ggtitle("[PERMANOVA] Pr(<F): 0.001") + 
+  labs(col = "Production Facility", shape = "Aging Facility") + 
+  geom_point(size = 2) +
+  coord_fixed(clr2 / clr1) +
+  theme_bw()
+ait_make
+```
+
+```{r}
+#Generate CLR distance matrix
+clr_dist_matrix_paste <- phyloseq::distance(ps_clr_paste, method = "euclidean") 
+#ADONIS test
+vegan::adonis(clr_dist_matrix_paste ~ phyloseq::sample_data(ps_clr_paste)$makefacility)
+#Dispersion test and plot
+anova(betadisper(clr_dist_matrix_paste, phyloseq::sample_data(ps_clr_paste)$makefacility))
+
+```
+
+```{r, warning=F, message=F}
+#PhILR
+GP.paste <- subset_samples(ps.dna, category == "Paste")
+GP.paste <- transform_sample_counts(GP.paste, function (x) x + 1) #adding a pseudocount of 1 to all values, since log is taken after transformed, this is fine. 
+#GP.paste <- microbiome::transform(GP.paste, "compositional")
+GP.paste
+
+is.rooted(phy_tree(GP.paste)) # Is the tree Rooted?
+tree.paste <- (root(phy_tree(GP.paste), 1, r = TRUE))
+is.rooted(tree.paste)
+is.binary.tree(tree.paste) # All multichotomies resolved?
+GP.paste
+
+tree.paste <- makeNodeLabel(tree.paste, method="number", prefix='n')
+
+name.balance(tree.paste, tax_table(GP.paste), 'n1')
+
+otu.table.paste <- (otu_table(GP.paste))
+metadata.paste <- sample_data(GP.paste)
+tax.paste <- tax_table(GP.paste)
+
+weight <- philr::calculate.blw(tree.paste)
+gp.philr.paste <- philr(otu.table.paste, tree.paste, 
+                  part.weights='enorm.x.gm.counts', 
+                  ilr.weights='blw.sqrt')
+
+gp.dist.paste <- dist(gp.philr.paste, method="euclidean")
+gp.nmds.paste <- ordinate(GP.paste, 'NMDS', distance=gp.dist.paste)
+B <- plot_ordination(GP.paste, gp.nmds.paste, color='makefacility', shape = "agingfacility", label = "day") + 
+  geom_point(size=2) + 
+  ggtitle("[PERMANOVA] Pr(<F): 0.001") + 
+  labs(col = "Production Facility", shape = "Aging Facility") +
+  theme_bw()
+B
+```
+
+```{r}
+#ADONIS test
+vegan::adonis(gp.dist.paste ~ phyloseq::sample_data(GP.paste)$makefacility)
+#Dispersion test and plot
+anova(betadisper(gp.dist.paste, phyloseq::sample_data(GP.paste)$makefacility))
+```
+
+```{r, fig.height=8.5, fig.width=11}
+JJ<- cowplot::plot_grid(ait_make, B, nrow = 2, ncol = 1, scale = .92, labels = c("Aitchison", "PhILR"))
+JJ
+```
+
+```{r, warning=F, message=F}
+#Phylogeny-plots
+ps.paste <- subset_samples(ps.dna, category == "Paste")
+ps.paste.rel <- microbiome::transform(ps.paste, "compositional")
+#ps.paste <- transform_sample_counts(ps.paste,function(x) log(1 + x))
+
+#Generate distances
+ord_bray_paste <- ordinate(ps.paste.rel, method = "NMDS", distance = "bray") 
+ord_jsd_paste <- ordinate(ps.paste, method = "NMDS", distance = "jaccard", binary = TRUE)   
+#Plot ordinations
+a <- plot_ordination(ps.paste, ord_bray_paste, label = "day", color = "makefacility", shape = "agingfacility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): FAIL") +   labs(col = "Production Facility", shape = "Aging Facility") + theme_bw()  
+b <- plot_ordination(ps.paste, ord_jsd_paste, label = "day", color = "makefacility", shape="agingfacility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): 0.001") +   labs(col = "Production Facility", shape = "Aging Facility")+ theme_bw()  
+cowplot::plot_grid(a, b, nrow = 1, ncol = 2, scale = .9, labels = c("Bray", "Jaccard")) 
+a
+b
+```
+
+```{r, warning=F, message=F}
+bray_dist_matrix_paste <- phyloseq::distance(ps.paste.rel, method = "bray")
+vegan::adonis(bray_dist_matrix_paste ~ phyloseq::sample_data(ps.paste.rel)$makefacility)
+anova(betadisper(bray_dist_matrix_paste, phyloseq::sample_data(ps.paste.rel)$makefacility))
+```
+
+```{r}
+jaccard_dist_matrix_paste <- phyloseq::distance(ps.paste, method = "jaccard")
+vegan::adonis(jaccard_dist_matrix_paste ~ phyloseq::sample_data(ps.paste)$makefacility)
+anova(betadisper(jaccard_dist_matrix_paste, phyloseq::sample_data(ps.paste)$makefacility))
+```
+
+```{r}
+#Phylogeny-plots
+ps.paste.phy <- subset_samples(ps.dna, category == "Paste")
+ps.paste.phy.rel <- microbiome::transform(ps.paste.phy, "compositional")
+#Generate distances
+ord_unifrac_paste <- ordinate(ps.paste.phy.rel, method = "NMDS", distance = "wunifrac") 
+ord_unifrac_un_paste <- ordinate(ps.paste.phy, method = "NMDS", distance = "unifrac")   
+#Plot ordinations
+c <- plot_ordination(ps.paste.phy.rel, ord_unifrac_paste, label = "day", color = "makefacility", shape = "agingfacility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): 0.001") +   labs(col = "Production Facility", shape = "Aging Facility") + theme_bw()  
+d <- plot_ordination(ps.paste.phy, ord_unifrac_un_paste, label = "day", color = "makefacility", shape="agingfacility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): 0.003") +   labs(col = "Production Facility", shape = "Aging Facility")+ theme_bw()  
+cowplot::plot_grid(c, d, nrow = 1, ncol = 2, scale = .9, labels = c("Wunifrac", "Unifrac")) 
+c
+d
+```
+
+```{r, warning=F, message=F}
+#weighted unifrac stats
+wuni_dist_matrix_paste <- phyloseq::distance(ps.paste.phy.rel, method = "wunifrac") 
+vegan::adonis(wuni_dist_matrix_paste ~ phyloseq::sample_data(ps.paste.phy)$makefacility)
+anova(betadisper(wuni_dist_matrix_paste, phyloseq::sample_data(ps.paste.phy)$makefacility))
+```
+
+```{r, warning=F, message=F}
+#unweighted unifrac stats
+uni_dist_matrix_paste <- phyloseq::distance(ps.paste.phy, method = "unifrac") 
+vegan::adonis(uni_dist_matrix_paste ~ phyloseq::sample_data(ps.paste.phy)$makefacility)
+anova(betadisper(uni_dist_matrix_paste, phyloseq::sample_data(ps.paste.phy)$makefacility))
+```
+```{r, fig.height=7.5, fig.width=15}
+cowplot::plot_grid(a, b, c, d, nrow = 2, ncol = 2, scale = .9, labels = c("Bray", "Jaccard", "Wunifrac", "Unifrac"))
+```
+
+#aging facility tests
+#BIRCHRUN HILLS
+```{r, warning=F, message=F}
+#Birchrun Hills
+ps.paste.bh <- subset_samples(ps.paste, makefacility == "PF1")
+ps.paste.phy.rel.bh <- subset_samples(ps.paste.phy.rel, makefacility == "PF1")
+ps_clr_paste.bh <- microbiome::transform(ps.paste.bh, "clr")
+#Generate distance matrix
+clr_dist_matrix_paste.bh <- phyloseq::distance(ps_clr_paste.bh, method = "euclidean") 
+#ADONIS test
+vegan::adonis(clr_dist_matrix_paste.bh ~ phyloseq::sample_data(ps_clr_paste.bh)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(clr_dist_matrix_paste.bh, phyloseq::sample_data(ps_clr_paste.bh)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+GP.paste.bh <- subset_samples(GP.paste, makefacility == "PF1")
+
+is.rooted(phy_tree(GP.paste.bh)) # Is the tree Rooted?
+tree.paste.bh <- (root(phy_tree(GP.paste.bh), 1, r = TRUE))
+is.rooted(tree.paste.bh)
+is.binary.tree(tree.paste.bh) # All multichotomies resolved?
+
+tree.paste.bh <- makeNodeLabel(tree.paste.bh, method="number", prefix='n')
+
+name.balance(tree.paste.bh, tax_table(GP.paste.bh), 'n1')
+
+otu.table.paste.bh <- (otu_table(GP.paste.bh))
+metadata.paste.bh <- sample_data(GP.paste.bh)
+tax.paste.bh <- tax_table(GP.paste.bh)
+
+weight <- philr::calculate.blw(tree.paste.bh)
+gp.philr.paste.bh <- philr(otu.table.paste.bh, tree.paste.bh, 
+                  part.weights='enorm.x.gm.counts', 
+                  ilr.weights='blw.sqrt')
+
+gp.dist.paste.bh <- dist(gp.philr.paste.bh, method="euclidean")
+#ADONIS test
+vegan::adonis(gp.dist.paste.bh ~ phyloseq::sample_data(GP.paste.bh)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(gp.dist.paste.bh, phyloseq::sample_data(GP.paste.bh)$agingfacility))
+```
+
+```{r}
+bray_dist_matrix_paste.bh <- phyloseq::distance(ps.paste.phy.rel.bh, method = "bray")
+vegan::adonis(bray_dist_matrix_paste.bh ~ phyloseq::sample_data(ps.paste.phy.rel.bh)$agingfacility)
+anova(betadisper(bray_dist_matrix_paste.bh, phyloseq::sample_data(ps.paste.phy.rel.bh)$agingfacility))
+```
+
+```{r}
+jaccard_dist_matrix_paste.bh <- phyloseq::distance(ps.paste.bh, method = "jaccard")
+vegan::adonis(jaccard_dist_matrix_paste.bh ~ phyloseq::sample_data(ps.paste.bh)$agingfacility)
+anova(betadisper(jaccard_dist_matrix_paste.bh, phyloseq::sample_data(ps.paste.bh)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#weighted unifrac stats
+wuni_dist_matrix_paste.bh <- phyloseq::distance(ps.paste.phy.rel.bh, method = "wunifrac") 
+vegan::adonis(wuni_dist_matrix_paste.bh ~ phyloseq::sample_data(ps.paste.phy.rel.bh)$agingfacility)
+anova(betadisper(wuni_dist_matrix_paste.bh, phyloseq::sample_data(ps.paste.phy.rel.bh)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#unweighted unifrac stats
+uni_dist_matrix_paste.bh <- phyloseq::distance(ps.paste.bh, method = "unifrac") 
+vegan::adonis(uni_dist_matrix_paste.bh ~ phyloseq::sample_data(ps.paste.bh)$agingfacility)
+anova(betadisper(uni_dist_matrix_paste.bh, phyloseq::sample_data(ps.paste.bh)$agingfacility))
+```
+
+#CATO CORNER
+```{r, warning=F, message=F}
+#Cato Corner
+ps.paste.cc <- subset_samples(ps.paste, makefacility == "PF2")
+ps.paste.phy.rel.cc <- subset_samples(ps.paste.phy.rel, makefacility == "PF2")
+ps_clr_paste.cc <- microbiome::transform(ps.paste.cc, "clr")
+#Generate distance matrix
+clr_dist_matrix_paste.cc <- phyloseq::distance(ps_clr_paste.cc, method = "euclidean") 
+#ADONIS test
+vegan::adonis(clr_dist_matrix_paste.cc ~ phyloseq::sample_data(ps_clr_paste.cc)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(clr_dist_matrix_paste.cc, phyloseq::sample_data(ps_clr_paste.cc)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+GP.paste.cc <- subset_samples(GP.paste, makefacility == "PF2")
+
+is.rooted(phy_tree(GP.paste.cc)) # Is the tree Rooted?
+tree.paste.cc <- (root(phy_tree(GP.paste.cc), 1, r = TRUE))
+is.rooted(tree.paste.cc)
+is.binary.tree(tree.paste.cc) # All multichotomies resolved?
+
+tree.paste.cc <- makeNodeLabel(tree.paste.cc, method="number", prefix='n')
+
+name.balance(tree.paste.cc, tax_table(GP.paste.cc), 'n1')
+
+otu.table.paste.cc <- (otu_table(GP.paste.cc))
+metadata.paste.cc <- sample_data(GP.paste.cc)
+tax.paste.cc <- tax_table(GP.paste.cc)
+
+weight <- philr::calculate.blw(tree.paste.cc)
+gp.philr.paste.cc <- philr(otu.table.paste.cc, tree.paste.cc, 
+                  part.weights='enorm.x.gm.counts', 
+                  ilr.weights='blw.sqrt')
+
+gp.dist.paste.cc <- dist(gp.philr.paste.cc, method="euclidean")
+#ADONIS test
+vegan::adonis(gp.dist.paste.cc ~ phyloseq::sample_data(GP.paste.cc)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(gp.dist.paste.cc, phyloseq::sample_data(GP.paste.cc)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+bray_dist_matrix_paste.cc <- phyloseq::distance(ps.paste.phy.rel.cc, method = "bray")
+vegan::adonis(bray_dist_matrix_paste.cc ~ phyloseq::sample_data(ps.paste.phy.rel.cc)$agingfacility)
+anova(betadisper(bray_dist_matrix_paste.cc, phyloseq::sample_data(ps.paste.phy.rel.cc)$agingfacility))
+```
+
+```{r}
+jaccard_dist_matrix_paste.cc <- phyloseq::distance(ps.paste.cc, method = "jaccard")
+vegan::adonis(jaccard_dist_matrix_paste.cc ~ phyloseq::sample_data(ps.paste.cc)$agingfacility)
+anova(betadisper(jaccard_dist_matrix_paste.cc, phyloseq::sample_data(ps.paste.cc)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#weighted unifrac stats
+wuni_dist_matrix_paste.cc <- phyloseq::distance(ps.paste.phy.rel.cc, method = "wunifrac") 
+vegan::adonis(wuni_dist_matrix_paste.cc ~ phyloseq::sample_data(ps.paste.phy.rel.cc)$agingfacility)
+anova(betadisper(wuni_dist_matrix_paste.cc, phyloseq::sample_data(ps.paste.phy.rel.cc)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#unweighted unifrac stats
+uni_dist_matrix_paste.cc <- phyloseq::distance(ps.paste.cc, method = "unifrac") 
+vegan::adonis(uni_dist_matrix_paste.cc ~ phyloseq::sample_data(ps.paste.cc)$agingfacility)
+anova(betadisper(uni_dist_matrix_paste.cc, phyloseq::sample_data(ps.paste.cc)$agingfacility))
+```
+
+#PARISH HILL
+```{r, warning=F, message=F}
+#Parish Hill
+ps.paste.ph <- subset_samples(ps.paste, makefacility == "PF3")
+ps.paste.phy.rel.ph <- subset_samples(ps.paste.phy.rel, makefacility == "PF3")
+ps_clr_paste.ph <- microbiome::transform(ps.paste.ph, "clr")
+#Generate distance matrix
+clr_dist_matrix_paste.ph <- phyloseq::distance(ps_clr_paste.ph, method = "euclidean") 
+#ADONIS test
+vegan::adonis(clr_dist_matrix_paste.ph ~ phyloseq::sample_data(ps_clr_paste.ph)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(clr_dist_matrix_paste.ph, phyloseq::sample_data(ps_clr_paste.ph)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+GP.paste.ph <- subset_samples(GP.paste, makefacility == "PF3")
+
+is.rooted(phy_tree(GP.paste.ph)) # Is the tree Rooted?
+tree.paste.ph <- (root(phy_tree(GP.paste.ph), 1, r = TRUE))
+is.rooted(tree.paste.ph)
+is.binary.tree(tree.paste.ph) # All multichotomies resolved?
+
+tree.paste.ph <- makeNodeLabel(tree.paste.ph, method="number", prefix='n')
+
+name.balance(tree.paste.ph, tax_table(GP.paste.ph), 'n1')
+
+otu.table.paste.ph <- (otu_table(GP.paste.ph))
+metadata.paste.ph <- sample_data(GP.paste.ph)
+tax.paste.ph <- tax_table(GP.paste.ph)
+
+weight <- philr::calculate.blw(tree.paste.ph)
+gp.philr.paste.ph <- philr(otu.table.paste.ph, tree.paste.ph, 
+                  part.weights='enorm.x.gm.counts', 
+                  ilr.weights='blw.sqrt')
+
+gp.dist.paste.ph <- dist(gp.philr.paste.ph, method="euclidean")
+#ADONIS test
+vegan::adonis(gp.dist.paste.ph ~ phyloseq::sample_data(GP.paste.ph)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(gp.dist.paste.ph, phyloseq::sample_data(GP.paste.ph)$agingfacility))
+```
+
+```{r}
+bray_dist_matrix_paste.ph <- phyloseq::distance(ps.paste.phy.rel.ph, method = "bray")
+vegan::adonis(bray_dist_matrix_paste.ph ~ phyloseq::sample_data(ps.paste.phy.rel.ph)$agingfacility)
+anova(betadisper(bray_dist_matrix_paste.ph, phyloseq::sample_data(ps.paste.phy.rel.ph)$agingfacility))
+```
+
+```{r}
+jaccard_dist_matrix_paste.ph <- phyloseq::distance(ps.paste.ph, method = "jaccard")
+vegan::adonis(jaccard_dist_matrix_paste.ph ~ phyloseq::sample_data(ps.paste.ph)$agingfacility)
+anova(betadisper(jaccard_dist_matrix_paste.ph, phyloseq::sample_data(ps.paste.ph)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#weighted unifrac stats
+wuni_dist_matrix_paste.ph <- phyloseq::distance(ps.paste.phy.rel.ph, method = "wunifrac") 
+vegan::adonis(wuni_dist_matrix_paste.ph ~ phyloseq::sample_data(ps.paste.phy.rel.ph)$agingfacility)
+anova(betadisper(wuni_dist_matrix_paste.ph, phyloseq::sample_data(ps.paste.phy.rel.ph)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#unweighted unifrac stats
+uni_dist_matrix_paste.ph <- phyloseq::distance(ps.paste.ph, method = "unifrac") 
+vegan::adonis(uni_dist_matrix_paste.ph ~ phyloseq::sample_data(ps.paste.ph)$agingfacility)
+anova(betadisper(uni_dist_matrix_paste.ph, phyloseq::sample_data(ps.paste.ph)$agingfacility))
+```
+------------------------------------------------------
+
+Rind Beta Diversity Stats True
+#make facility tests
+```{r}
+#CLR
+ps.rind <- subset_samples(ps.asv, category == "Rind")
+ps_clr_rind <- microbiome::transform(ps.rind, "clr")
+#PCA via phyloseq
+ord_clr_rind <- phyloseq::ordinate(ps_clr_rind, "RDA")
+#Plot scree plot
+phyloseq::plot_scree(ord_clr_rind) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+#Examine eigenvalues and % prop. variance explained
+head(ord_clr_rind$CA$eig) 
+sapply(ord_clr_rind$CA$eig[1:5], function(x) x / sum(ord_clr_rind$CA$eig))     
+#Plot ordination
+clr1 <- ord_clr_rind$CA$eig[1] / sum(ord_clr_rind$CA$eig)
+clr2 <- ord_clr_rind$CA$eig[2] / sum(ord_clr_rind$CA$eig)
+ait_make2 <- phyloseq::plot_ordination(ps_clr_rind, ord_clr_rind, type="samples", color="makefacility", shape = "agingfacility", label = "day") + 
+  ggtitle("[PERMANOVA] Pr(<F): 0.001") + 
+  labs(col = "Production Facility", shape = "Aging Facility") + 
+  geom_point(size = 2) +
+  coord_fixed(clr2 / clr1) +
+  theme_bw()
+ait_make2
+```
+
+```{r}
+#Generate CLR distance matrix
+clr_dist_matrix_rind <- phyloseq::distance(ps_clr_rind, method = "euclidean") 
+#ADONIS test
+vegan::adonis(clr_dist_matrix_rind ~ phyloseq::sample_data(ps_clr_rind)$makefacility)
+#Dispersion test and plot
+anova(betadisper(clr_dist_matrix_rind, phyloseq::sample_data(ps_clr_rind)$makefacility))
+
+```
+
+```{r}
+#PhILR
+GP.rind <- subset_samples(ps.dna, category == "Rind")
+GP.rind <- transform_sample_counts(GP.rind, function (x) x + 1) #adding a pseudocount of 1 to all values, since log is taken after transformed, this is fine. 
+#GP.rind <- microbiome::transform(GP.rind, "compositional")
+GP.rind
+
+is.rooted(phy_tree(GP.rind)) # Is the tree Rooted?
+tree.rind <- (root(phy_tree(GP.rind), 1, r = TRUE))
+is.rooted(tree.rind)
+is.binary.tree(tree.rind) # All multichotomies resolved?
+GP.rind
+
+tree.rind <- makeNodeLabel(tree.rind, method="number", prefix='n')
+
+name.balance(tree.rind, tax_table(GP.rind), 'n1')
+
+otu.table.rind <- (otu_table(GP.rind))
+metadata.rind <- sample_data(GP.rind)
+tax.rind <- tax_table(GP.rind)
+
+weight <- philr::calculate.blw(tree.rind)
+gp.philr.rind <- philr(otu.table.rind, tree.rind, 
+                  part.weights='enorm.x.gm.counts', 
+                  ilr.weights='blw.sqrt')
+
+gp.dist.rind <- dist(gp.philr.rind, method="euclidean")
+gp.nmds.rind <- ordinate(GP.rind, 'NMDS', distance=gp.dist.rind)
+B2 <- plot_ordination(GP.rind, gp.nmds.rind, color='makefacility', shape = "agingfacility", label = "day") + 
+  geom_point(size=2) + 
+  ggtitle("[PERMANOVA] Pr(<F): 0.008") + 
+  labs(col = "Production Facility", shape = "Aging Facility") +
+  theme_bw()
+B2
+```
+```{r, fig.height=8.5, fig.width=11}
+KK <- cowplot::plot_grid(ait_make2, B2, nrow = 2, ncol = 1, scale = .92, labels = c("Aitchison", "PhILR"))
+KK
+```
+
+```{r, fig.height=7.5, fig.width=15}
+cowplot::plot_grid(ait_make, B, ait_make2, B2, nrow = 2, ncol = 2, scale = 1, labels = c("A", "B", "C", "D"))
+```
+
+```{r}
+#ADONIS test
+vegan::adonis(gp.dist.rind ~ phyloseq::sample_data(GP.rind)$makefacility)
+#Dispersion test and plot
+anova(betadisper(gp.dist.rind, phyloseq::sample_data(GP.rind)$makefacility))
+```
+
+```{r, warning=F, message=F}
+#Phylogeny-plots
+ps.rind <- subset_samples(ps.dna, category == "Rind")
+ps.rind.rel <- microbiome::transform(ps.rind, "compositional")
+#ps.rind <- transform_sample_counts(ps.rind,function(x) log(1 + x))
+
+#Generate distances
+ord_bray_rind <- ordinate(ps.rind.rel, method = "NMDS", distance = "bray") 
+ord_jsd_rind <- ordinate(ps.rind, method = "NMDS", distance = "jaccard", binary = TRUE)   
+#Plot ordinations
+e <- plot_ordination(ps.rind.rel, ord_bray_rind, label = "day", color = "makefacility", shape = "agingfacility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): 0.001") +   labs(col = "Production Facility", shape = "Aging Facility") + theme_bw()  
+f <- plot_ordination(ps.rind, ord_jsd_rind, label = "day", color = "makefacility", shape="agingfacility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): 0.001") +   labs(col = "Production Facility", shape = "Aging Facility")+ theme_bw()  
+cowplot::plot_grid(e, f, nrow = 1, ncol = 2, scale = .9, labels = c("Bray", "Jaccard"), title = "Rind") 
+e
+f
+```
+
+```{r}
+bray_dist_matrix_rind <- phyloseq::distance(ps.rind.rel, method = "bray")
+vegan::adonis(bray_dist_matrix_rind ~ phyloseq::sample_data(ps.rind.rel)$makefacility)
+anova(betadisper(bray_dist_matrix_rind, phyloseq::sample_data(ps.rind.rel)$makefacility))
+```
+
+```{r}
+jaccard_dist_matrix_rind <- phyloseq::distance(ps.rind, method = "jaccard")
+vegan::adonis(jaccard_dist_matrix_rind ~ phyloseq::sample_data(ps.rind)$makefacility)
+anova(betadisper(jaccard_dist_matrix_rind, phyloseq::sample_data(ps.rind)$makefacility))
+```
+
+```{r, warning=F, message=F}
+#Phylogeny-plots
+ps.rind.phy <- subset_samples(ps.dna, category == "Rind")
+ps.rind.phy.rel <- microbiome::transform(ps.rind.phy, "compositional")
+#Generate distances
+ord_unifrac_rind <- ordinate(ps.rind.phy.rel, method = "NMDS", distance = "wunifrac") 
+ord_unifrac_un_rind <- ordinate(ps.rind.phy, method = "NMDS", distance = "unifrac")   
+#Plot ordinations
+g <- plot_ordination(ps.rind.phy.rel, ord_unifrac_rind, label = "day", color = "makefacility", shape = "agingfacility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): 0.008") +   labs(col = "Production Facility", shape = "Aging Facility") + theme_bw()  
+h <- plot_ordination(ps.rind.phy, ord_unifrac_un_rind, label = "day", color = "makefacility", shape="agingfacility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): 0.001") +   labs(col = "Production Facility", shape = "Aging Facility")+ theme_bw()  
+cowplot::plot_grid(g, h, nrow = 1, ncol = 2, scale = .9, labels = c("Wunifrac", "Unifrac")) 
+g
+h
+```
+
+```{r, warning=F, message=F}
+#weighted unifrac stats
+wuni_dist_matrix_rind <- phyloseq::distance(ps.rind.phy.rel, method = "wunifrac") 
+vegan::adonis(wuni_dist_matrix_rind ~ phyloseq::sample_data(ps.rind.phy)$makefacility)
+anova(betadisper(wuni_dist_matrix_rind, phyloseq::sample_data(ps.rind.phy)$makefacility))
+```
+
+```{r, warning=F, message=F}
+#unweighted unifrac stats
+uni_dist_matrix_rind <- phyloseq::distance(ps.rind.phy, method = "unifrac") 
+vegan::adonis(uni_dist_matrix_rind ~ phyloseq::sample_data(ps.rind.phy)$makefacility)
+anova(betadisper(uni_dist_matrix_rind, phyloseq::sample_data(ps.rind.phy)$makefacility))
+```
+
+```{r, fig.height=7.5, fig.width=15}
+cowplot::plot_grid(e, f, g, h, nrow = 2, ncol = 2, scale = .9, labels = c("Bray", "Jaccard", "Wunifrac", "Unifrac"), title = "Rind")
+```
+
+#aging facility tests
+#BIRCHRUN HILLS
+```{r, warning=F, message=F}
+#Birchrun Hills
+ps.rind.bh <- subset_samples(ps.rind, makefacility == "PF1")
+ps.rind.phy.rel.bh <- subset_samples(ps.rind.phy.rel, makefacility == "PF1")
+ps_clr_rind.bh <- microbiome::transform(ps.rind.bh, "clr")
+#Generate distance matrix
+clr_dist_matrix_rind.bh <- phyloseq::distance(ps_clr_rind.bh, method = "euclidean") 
+#ADONIS test
+vegan::adonis(clr_dist_matrix_rind.bh ~ phyloseq::sample_data(ps_clr_rind.bh)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(clr_dist_matrix_rind.bh, phyloseq::sample_data(ps_clr_rind.bh)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+GP.rind.bh <- subset_samples(GP.rind, makefacility == "PF1")
+
+is.rooted(phy_tree(GP.rind.bh)) # Is the tree Rooted?
+tree.rind.bh <- (root(phy_tree(GP.rind.bh), 1, r = TRUE))
+is.rooted(tree.rind.bh)
+is.binary.tree(tree.rind.bh) # All multichotomies resolved?
+
+tree.rind.bh <- makeNodeLabel(tree.rind.bh, method="number", prefix='n')
+
+name.balance(tree.rind.bh, tax_table(GP.rind.bh), 'n1')
+
+otu.table.rind.bh <- (otu_table(GP.rind.bh))
+metadata.rind.bh <- sample_data(GP.rind.bh)
+tax.rind.bh <- tax_table(GP.rind.bh)
+
+weight <- philr::calculate.blw(tree.rind.bh)
+gp.philr.rind.bh <- philr(otu.table.rind.bh, tree.rind.bh, 
+                  part.weights='enorm.x.gm.counts', 
+                  ilr.weights='blw.sqrt')
+
+gp.dist.rind.bh <- dist(gp.philr.rind.bh, method="euclidean")
+#ADONIS test
+vegan::adonis(gp.dist.rind.bh ~ phyloseq::sample_data(GP.rind.bh)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(gp.dist.rind.bh, phyloseq::sample_data(GP.rind.bh)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+bray_dist_matrix_rind.bh <- phyloseq::distance(ps.rind.phy.rel.bh, method = "bray")
+vegan::adonis(bray_dist_matrix_rind.bh ~ phyloseq::sample_data(ps.rind.phy.rel.bh)$agingfacility)
+anova(betadisper(bray_dist_matrix_rind.bh, phyloseq::sample_data(ps.rind.phy.rel.bh)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+jaccard_dist_matrix_rind.bh <- phyloseq::distance(ps.rind.bh, method = "jaccard")
+vegan::adonis(jaccard_dist_matrix_rind.bh ~ phyloseq::sample_data(ps.rind.bh)$agingfacility)
+anova(betadisper(jaccard_dist_matrix_rind.bh, phyloseq::sample_data(ps.rind.bh)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#weighted unifrac stats
+wuni_dist_matrix_rind.bh <- phyloseq::distance(ps.rind.phy.rel.bh, method = "wunifrac") 
+vegan::adonis(wuni_dist_matrix_rind.bh ~ phyloseq::sample_data(ps.rind.phy.rel.bh)$agingfacility)
+anova(betadisper(wuni_dist_matrix_rind.bh, phyloseq::sample_data(ps.rind.phy.rel.bh)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#unweighted unifrac stats
+uni_dist_matrix_rind.bh <- phyloseq::distance(ps.rind.bh, method = "unifrac") 
+vegan::adonis(uni_dist_matrix_rind.bh ~ phyloseq::sample_data(ps.rind.bh)$agingfacility)
+anova(betadisper(uni_dist_matrix_rind.bh, phyloseq::sample_data(ps.rind.bh)$agingfacility))
+```
+
+#CATO CORNER
+```{r, warning=F, message=F}
+#Cato Corner
+ps.rind.cc <- subset_samples(ps.rind, makefacility == "PF2")
+ps.rind.phy.rel.cc <- subset_samples(ps.rind.phy.rel, makefacility == "PF2")
+ps_clr_rind.cc <- microbiome::transform(ps.rind.cc, "clr")
+#Generate distance matrix
+clr_dist_matrix_rind.cc <- phyloseq::distance(ps_clr_rind.cc, method = "euclidean") 
+#ADONIS test
+vegan::adonis(clr_dist_matrix_rind.cc ~ phyloseq::sample_data(ps_clr_rind.cc)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(clr_dist_matrix_rind.cc, phyloseq::sample_data(ps_clr_rind.cc)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+GP.rind.cc <- subset_samples(GP.rind, makefacility == "PF2")
+
+is.rooted(phy_tree(GP.rind.cc)) # Is the tree Rooted?
+tree.rind.cc <- (root(phy_tree(GP.rind.cc), 1, r = TRUE))
+is.rooted(tree.rind.cc)
+is.binary.tree(tree.rind.cc) # All multichotomies resolved?
+
+tree.rind.cc <- makeNodeLabel(tree.rind.cc, method="number", prefix='n')
+
+name.balance(tree.rind.cc, tax_table(GP.rind.cc), 'n1')
+
+otu.table.rind.cc <- (otu_table(GP.rind.cc))
+metadata.rind.cc <- sample_data(GP.rind.cc)
+tax.rind.cc <- tax_table(GP.rind.cc)
+
+weight <- philr::calculate.blw(tree.rind.cc)
+gp.philr.rind.cc <- philr(otu.table.rind.cc, tree.rind.cc, 
+                  part.weights='enorm.x.gm.counts', 
+                  ilr.weights='blw.sqrt')
+
+gp.dist.rind.cc <- dist(gp.philr.rind.cc, method="euclidean")
+#ADONIS test
+vegan::adonis(gp.dist.rind.cc ~ phyloseq::sample_data(GP.rind.cc)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(gp.dist.rind.cc, phyloseq::sample_data(GP.rind.cc)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+bray_dist_matrix_rind.cc <- phyloseq::distance(ps.rind.phy.rel.cc, method = "bray")
+vegan::adonis(bray_dist_matrix_rind.cc ~ phyloseq::sample_data(ps.rind.phy.rel.cc)$agingfacility)
+anova(betadisper(bray_dist_matrix_rind.cc, phyloseq::sample_data(ps.rind.phy.rel.cc)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+jaccard_dist_matrix_rind.cc <- phyloseq::distance(ps.rind.cc, method = "jaccard")
+vegan::adonis(jaccard_dist_matrix_rind.cc ~ phyloseq::sample_data(ps.rind.cc)$agingfacility)
+anova(betadisper(jaccard_dist_matrix_rind.cc, phyloseq::sample_data(ps.rind.cc)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#weighted unifrac stats
+wuni_dist_matrix_rind.cc <- phyloseq::distance(ps.rind.phy.rel.cc, method = "wunifrac") 
+vegan::adonis(wuni_dist_matrix_rind.cc ~ phyloseq::sample_data(ps.rind.phy.rel.cc)$agingfacility)
+anova(betadisper(wuni_dist_matrix_rind.cc, phyloseq::sample_data(ps.rind.phy.rel.cc)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#unweighted unifrac stats
+uni_dist_matrix_rind.cc <- phyloseq::distance(ps.rind.cc, method = "unifrac") 
+vegan::adonis(uni_dist_matrix_rind.cc ~ phyloseq::sample_data(ps.rind.cc)$agingfacility)
+anova(betadisper(uni_dist_matrix_rind.cc, phyloseq::sample_data(ps.rind.cc)$agingfacility))
+```
+
+#PARISH HILL
+```{r, warning=F, message=F}
+#Parish Hill
+ps.rind.ph <- subset_samples(ps.rind, makefacility == "PF3")
+ps.rind.phy.rel.ph <- subset_samples(ps.rind.phy.rel, makefacility == "PF3")
+ps_clr_rind.ph <- microbiome::transform(ps.rind.ph, "clr")
+#Generate distance matrix
+clr_dist_matrix_rind.ph <- phyloseq::distance(ps_clr_rind.ph, method = "euclidean") 
+#ADONIS test
+vegan::adonis(clr_dist_matrix_rind.ph ~ phyloseq::sample_data(ps_clr_rind.ph)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(clr_dist_matrix_rind.ph, phyloseq::sample_data(ps_clr_rind.ph)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+GP.rind.ph <- subset_samples(GP.rind, makefacility == "PF3")
+
+is.rooted(phy_tree(GP.rind.ph)) # Is the tree Rooted?
+tree.rind.ph <- (root(phy_tree(GP.rind.ph), 1, r = TRUE))
+is.rooted(tree.rind.ph)
+is.binary.tree(tree.rind.ph) # All multichotomies resolved?
+
+tree.rind.ph <- makeNodeLabel(tree.rind.ph, method="number", prefix='n')
+
+name.balance(tree.rind.ph, tax_table(GP.rind.ph), 'n1')
+
+otu.table.rind.ph <- (otu_table(GP.rind.ph))
+metadata.rind.ph <- sample_data(GP.rind.ph)
+tax.rind.ph <- tax_table(GP.rind.ph)
+
+weight <- philr::calculate.blw(tree.rind.ph)
+gp.philr.rind.ph <- philr(otu.table.rind.ph, tree.rind.ph, 
+                  part.weights='enorm.x.gm.counts', 
+                  ilr.weights='blw.sqrt')
+
+gp.dist.rind.ph <- dist(gp.philr.rind.ph, method="euclidean")
+#ADONIS test
+vegan::adonis(gp.dist.rind.ph ~ phyloseq::sample_data(GP.rind.ph)$agingfacility)
+#Dispersion test and plot
+anova(betadisper(gp.dist.rind.ph, phyloseq::sample_data(GP.rind.ph)$agingfacility))
+```
+
+```{r}
+bray_dist_matrix_rind.ph <- phyloseq::distance(ps.rind.phy.rel.ph, method = "bray")
+vegan::adonis(bray_dist_matrix_rind.ph ~ phyloseq::sample_data(ps.rind.phy.rel.ph)$agingfacility)
+anova(betadisper(bray_dist_matrix_rind.ph, phyloseq::sample_data(ps.rind.phy.rel.ph)$agingfacility))
+```
+
+```{r}
+jaccard_dist_matrix_rind.ph <- phyloseq::distance(ps.rind.ph, method = "jaccard")
+vegan::adonis(jaccard_dist_matrix_rind.ph ~ phyloseq::sample_data(ps.rind.ph)$agingfacility)
+anova(betadisper(jaccard_dist_matrix_rind.ph, phyloseq::sample_data(ps.rind.ph)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#weighted unifrac stats
+wuni_dist_matrix_rind.ph <- phyloseq::distance(ps.rind.phy.rel.ph, method = "wunifrac") 
+vegan::adonis(wuni_dist_matrix_rind.ph ~ phyloseq::sample_data(ps.rind.phy.rel.ph)$agingfacility)
+anova(betadisper(wuni_dist_matrix_rind.ph, phyloseq::sample_data(ps.rind.phy.rel.ph)$agingfacility))
+```
+
+```{r, warning=F, message=F}
+#unweighted unifrac stats
+uni_dist_matrix_rind.ph <- phyloseq::distance(ps.rind.ph, method = "unifrac") 
+vegan::adonis(uni_dist_matrix_rind.ph ~ phyloseq::sample_data(ps.rind.ph)$agingfacility)
+anova(betadisper(uni_dist_matrix_rind.ph, phyloseq::sample_data(ps.rind.ph)$agingfacility))
+```
+
+#Environment
+#make facility
+```{r}
+#CLR
+ps.envrnmnt <- subset_samples(ps.asv, category == "Fan"|category == "Maker"|category == "Form"|category == "Shelf"|category == "Table")
+ps_clr_envrnmnt <- microbiome::transform(ps.envrnmnt, "clr")
+#PCA via phyloseq
+ord_clr_envrnmnt <- phyloseq::ordinate(ps_clr_envrnmnt, "RDA")
+#Plot scree plot
+phyloseq::plot_scree(ord_clr_envrnmnt) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+#Examine eigenvalues and % prop. variance explained
+head(ord_clr_envrnmnt$CA$eig) 
+sapply(ord_clr_envrnmnt$CA$eig[1:5], function(x) x / sum(ord_clr_envrnmnt$CA$eig))     
+#Plot ordination
+clr1 <- ord_clr_envrnmnt$CA$eig[1] / sum(ord_clr_envrnmnt$CA$eig)
+clr2 <- ord_clr_envrnmnt$CA$eig[2] / sum(ord_clr_envrnmnt$CA$eig)
+ait_make <- phyloseq::plot_ordination(ps_clr_envrnmnt, ord_clr_envrnmnt, type="samples", color="facility", shape = "facility", label = "category") + 
+  ggtitle("[PERMANOVA] Pr(<F): 0.011") + 
+  labs(col = "Facility", shape = "Facility") + 
+  geom_point(size = 2) +
+  coord_fixed(clr2 / clr1) +
+  theme_bw()
+ait_make
+```
+
+```{r}
+#Generate CLR distance matrix
+clr_dist_matrix_envrnmnt <- phyloseq::distance(ps_clr_envrnmnt, method = "euclidean") 
+#ADONIS test
+vegan::adonis(clr_dist_matrix_envrnmnt ~ phyloseq::sample_data(ps_clr_envrnmnt)$facility)
+#Dispersion test and plot
+anova(betadisper(clr_dist_matrix_envrnmnt, phyloseq::sample_data(ps_clr_envrnmnt)$facility))
+
+```
+
+```{r, warning=F, message=F}
+#PhILR
+GP.envrnmnt <- subset_samples(ps.dna, category == "Fan"|category == "Maker"|category == "Form"|category == "Shelf"|category == "Table")
+GP.envrnmnt <- transform_sample_counts(GP.envrnmnt, function (x) x + 1) #adding a pseudocount of 1 to all values, since log is taken after transformed, this is fine. 
+#GP.envrnmnt <- microbiome::transform(GP.envrnmnt, "compositional")
+GP.envrnmnt
+
+is.rooted(phy_tree(GP.envrnmnt)) # Is the tree Rooted?
+tree.envrnmnt <- (root(phy_tree(GP.envrnmnt), 1, r = TRUE))
+is.rooted(tree.envrnmnt)
+is.binary.tree(tree.envrnmnt) # All multichotomies resolved?
+GP.envrnmnt
+
+tree.envrnmnt <- makeNodeLabel(tree.envrnmnt, method="number", prefix='n')
+
+name.balance(tree.envrnmnt, tax_table(GP.envrnmnt), 'n1')
+
+otu.table.envrnmnt <- (otu_table(GP.envrnmnt))
+metadata.envrnmnt <- sample_data(GP.envrnmnt)
+tax.envrnmnt <- tax_table(GP.envrnmnt)
+
+weight <- philr::calculate.blw(tree.envrnmnt)
+gp.philr.envrnmnt <- philr(otu.table.envrnmnt, tree.envrnmnt, 
+                  part.weights='enorm.x.gm.counts', 
+                  ilr.weights='blw.sqrt')
+
+gp.dist.envrnmnt <- dist(gp.philr.envrnmnt, method="euclidean")
+gp.nmds.envrnmnt <- ordinate(GP.envrnmnt, 'NMDS', distance=gp.dist.envrnmnt)
+B <- plot_ordination(GP.envrnmnt, gp.nmds.envrnmnt, color='facility', shape = "facility", label = "category") + 
+  geom_point(size=2) + 
+  ggtitle("[PERMANOVA] Pr(<F): 0.057") + 
+  labs(col = "Facility", shape = "Facility") +
+  theme_bw()
+B
+```
+
+```{r}
+#ADONIS test
+vegan::adonis(gp.dist.envrnmnt ~ phyloseq::sample_data(GP.envrnmnt)$facility)
+#Dispersion test and plot
+anova(betadisper(gp.dist.envrnmnt, phyloseq::sample_data(GP.envrnmnt)$facility))
+```
+
+```{r}
+cowplot::plot_grid(ait_make, B, nrow = 2, ncol = 1, scale = .9, labels = c("Aitchison", "PhILR"))
+```
+
+```{r, warning=F, message=F}
+#Phylogeny-plots
+ps.envrnmnt <- subset_samples(ps.dna, category == "Fan"|category == "Maker"|category == "Form"|category == "Shelf"|category == "Table")
+ps.envrnmnt.rel <- microbiome::transform(ps.envrnmnt, "compositional")
+#ps.envrnmnt <- transform_sample_counts(ps.envrnmnt,function(x) log(1 + x))
+
+#Generate distances
+ord_bray_envrnmnt <- ordinate(ps.envrnmnt.rel, method = "NMDS", distance = "bray") 
+ord_jsd_envrnmnt <- ordinate(ps.envrnmnt, method = "NMDS", distance = "jaccard", binary = TRUE)   
+#Plot ordinations
+a <- plot_ordination(ps.envrnmnt, ord_bray_envrnmnt, label = "category", color = "facility", shape = "facility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): FAIL") +   labs(col = "Facility", shape = "Facility") + theme_bw()  
+b <- plot_ordination(ps.envrnmnt, ord_jsd_envrnmnt, label = "category", color = "facility", shape="facility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): FAIL") +   labs(col = "Facility", shape = "Facility")+ theme_bw()  
+cowplot::plot_grid(a, b, nrow = 1, ncol = 2, scale = .9, labels = c("Bray", "Jaccard")) 
+a
+b
+```
+
+```{r, warning=F, message=F}
+bray_dist_matrix_envrnmnt <- phyloseq::distance(ps.envrnmnt.rel, method = "bray")
+vegan::adonis(bray_dist_matrix_envrnmnt ~ phyloseq::sample_data(ps.envrnmnt.rel)$facility)
+anova(betadisper(bray_dist_matrix_envrnmnt, phyloseq::sample_data(ps.envrnmnt.rel)$facility))
+```
+
+```{r}
+jaccard_dist_matrix_envrnmnt <- phyloseq::distance(ps.envrnmnt, method = "jaccard")
+vegan::adonis(jaccard_dist_matrix_envrnmnt ~ phyloseq::sample_data(ps.envrnmnt)$facility)
+anova(betadisper(jaccard_dist_matrix_envrnmnt, phyloseq::sample_data(ps.envrnmnt)$facility))
+```
+
+```{r}
+#Phylogeny-plots
+ps.envrnmnt.phy <- subset_samples(ps.dna, category == "Fan"|category == "Maker"|category == "Form"|category == "Shelf"|category == "Table")
+ps.envrnmnt.phy.rel <- microbiome::transform(ps.envrnmnt.phy, "compositional")
+#Generate distances
+ord_unifrac_envrnmnt <- ordinate(ps.envrnmnt.phy.rel, method = "NMDS", distance = "wunifrac") 
+ord_unifrac_un_envrnmnt <- ordinate(ps.envrnmnt.phy, method = "NMDS", distance = "unifrac")   
+#Plot ordinations
+c <- plot_ordination(ps.envrnmnt.phy.rel, ord_unifrac_envrnmnt, label = "category", color = "facility", shape = "facility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): 0.435") +   labs(col = "Facility", shape = "Facility") + theme_bw()  
+d <- plot_ordination(ps.envrnmnt.phy, ord_unifrac_un_envrnmnt, label = "category", color = "facility", shape="facility") + geom_point(size = 2) + ggtitle("[PERMANOVA] Pr(<F): 0.21") +   labs(col = "Facility", shape = "Facility")+ theme_bw()  
+cowplot::plot_grid(c, d, nrow = 1, ncol = 2, scale = .9, labels = c("Wunifrac", "Unifrac")) 
+c
+d
+```
+
+```{r, warning=F, message=F}
+#weighted unifrac stats
+wuni_dist_matrix_envrnmnt <- phyloseq::distance(ps.envrnmnt.phy.rel, method = "wunifrac") 
+vegan::adonis(wuni_dist_matrix_envrnmnt ~ phyloseq::sample_data(ps.envrnmnt.phy)$facility)
+anova(betadisper(wuni_dist_matrix_envrnmnt, phyloseq::sample_data(ps.envrnmnt.phy)$facility))
+```
+
+```{r, warning=F, message=F}
+#unweighted unifrac stats
+uni_dist_matrix_envrnmnt <- phyloseq::distance(ps.envrnmnt.phy, method = "unifrac") 
+vegan::adonis(uni_dist_matrix_envrnmnt ~ phyloseq::sample_data(ps.envrnmnt.phy)$facility)
+anova(betadisper(uni_dist_matrix_envrnmnt, phyloseq::sample_data(ps.envrnmnt.phy)$facility))
+```
+```{r, fig.height=7.5, fig.width=15}
+cowplot::plot_grid(a, b, c, d, nrow = 2, ncol = 2, scale = .9, labels = c("Bray", "Jaccard", "Wunifrac", "Unifrac"))
+```
+#DeSeq2 Setup#
+
+```{r}
+#generic dds pre-work (likely not needed but idk what im even doing rn)
+new_tax_tab <- as.data.frame(tax_table(ps.asv))
+new_count_tab <- as.data.frame(otu_table(ps.asv))
+
+#paste deseq setup
+paste_sample_IDs <- row.names(sample_info_tab)[sample_info_tab$category == "Paste"]
+paste_sample_info_tab <- sample_info_tab[row.names(sample_info_tab) %in% paste_sample_IDs, ]
+paste_count_phy <- otu_table(new_count_tab[, colnames(new_count_tab) %in% paste_sample_IDs], taxa_are_rows=T)
+paste_count_physeq <- phyloseq(paste_count_phy, sample_data(paste_sample_info_tab))
+
+#run deseq
+pdds <- phyloseq_to_deseq2(paste_count_physeq, ~makefacility)
+pdds <- DESeq(pdds, test="Wald", fitType="parametric")
+pdds
+```
+
+```{r}
+#Paste PF1 vs PF2
+res = results(pdds, contrast = c("makefacility", "PF1", "PF2"))
+alpha = 0.01
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps.asv)[rownames(sigtab), ], "matrix"))
+sigtab
+
+theme_set(theme_bw())
+x = tapply(sigtab$log2FoldChange, sigtab$Species, function(x) max(x))
+#x = sort(x, TRUE)
+sigtab$Species = factor(as.character(sigtab$Species), levels=names(x))
+a <- ggplot(sigtab, aes(x=log2FoldChange, y=Species, color= log2FoldChange > 2)) +
+  scale_color_manual(values = c("blue", "red")) +
+  geom_point(size=2) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = .50, vjust=0)) +
+  theme(axis.title = element_blank())+
+  xlim(-50, 50) +
+  theme(legend.position = "none") +
+  ggtitle("PF1 : PF2") +
+  theme(plot.title = element_text(hjust = 0.5))
+#a
+
+```
+
+```{r}
+#Paste PF1 vs PF3
+res = results(pdds, contrast = c("makefacility", "PF1", "PF3"))
+alpha = 0.01
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps.asv)[rownames(sigtab), ], "matrix"))
+sigtab
+
+theme_set(theme_bw())
+x = tapply(sigtab$log2FoldChange, sigtab$Species, function(x) max(x))
+#x = sort(x, TRUE)
+sigtab$Species = factor(as.character(sigtab$Species), levels=names(x))
+b <- ggplot(sigtab, aes(x=log2FoldChange, y=Species, color= log2FoldChange > 2)) +
+  scale_color_manual(values = c("blue", "red")) +
+  geom_point(size=2) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = .50, vjust=0)) +
+  theme(axis.title = element_blank())+
+  xlim(-50, 50) +
+  theme(legend.position = "none") +
+  ggtitle("PF1 : PF3") +
+  theme(plot.title = element_text(hjust = 0.5))
+#b
+```
+
+```{r}
+#Paste PF2 vs PF3
+res = results(pdds, contrast = c("makefacility", "PF2", "PF3"))
+alpha = 0.01
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps.asv)[rownames(sigtab), ], "matrix"))
+sigtab
+
+theme_set(theme_bw())
+x = tapply(sigtab$log2FoldChange, sigtab$Species, function(x) max(x))
+#x = sort(x, TRUE)
+sigtab$Species = factor(as.character(sigtab$Species), levels=names(x))
+c <- ggplot(sigtab, aes(x=log2FoldChange, y=Species, color= log2FoldChange > 2)) +
+  scale_color_manual(values = c("blue", "red")) +
+  geom_point(size=2) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = .50, vjust=0)) +
+  theme(axis.title = element_blank())+
+  xlim(-50, 50) +
+  theme(legend.position = "none") +
+  ggtitle("PF2 : PF3") +
+  theme(plot.title = element_text(hjust = 0.5))
+#c
+```
+
+```{r}
+#Rind deseq setup
+rind_sample_IDs <- row.names(sample_info_tab)[sample_info_tab$category == "Rind"]
+rind_sample_info_tab <- sample_info_tab[row.names(sample_info_tab) %in% rind_sample_IDs, ]
+rind_count_phy <- otu_table(new_count_tab[, colnames(new_count_tab) %in% rind_sample_IDs], taxa_are_rows=T)
+rind_count_physeq <- phyloseq(rind_count_phy, sample_data(rind_sample_info_tab))
+
+#run deseq
+rdds <- phyloseq_to_deseq2(rind_count_physeq, ~makefacility)
+rdds <- DESeq(rdds, test="Wald", fitType="parametric")
+rdds
+```
+
+```{r}
+#Rind PF1 vs PF2
+res = results(rdds, contrast = c("makefacility", "PF1", "PF2"))
+alpha = 0.01
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps.asv)[rownames(sigtab), ], "matrix"))
+sigtab
+
+theme_set(theme_bw())
+x = tapply(sigtab$log2FoldChange, sigtab$Species, function(x) max(x))
+#x = sort(x, TRUE)
+sigtab$Species = factor(as.character(sigtab$Species), levels=names(x))
+d <- ggplot(sigtab, aes(x=log2FoldChange, y=Species, color= log2FoldChange > 2)) +
+  scale_color_manual(values = c("blue", "red")) +
+  geom_point(size=2) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = .50, vjust=0)) +
+  theme(axis.title = element_blank())+
+  xlim(-50, 50) +
+  theme(legend.position = "none") +
+  ggtitle("PF1 : PF2") +
+  theme(plot.title = element_text(hjust = 0.5))
+#d
+```
+
+```{r}
+#Rind PF1 vs PF3
+res = results(rdds, contrast = c("makefacility", "PF1", "PF3"))
+alpha = 0.01
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps.asv)[rownames(sigtab), ], "matrix"))
+sigtab
+
+theme_set(theme_bw())
+x = tapply(sigtab$log2FoldChange, sigtab$Species, function(x) max(x))
+#x = sort(x, TRUE)
+sigtab$Species = factor(as.character(sigtab$Species), levels=names(x))
+e <- ggplot(sigtab, aes(x=log2FoldChange, y=Species, color= log2FoldChange > 2)) +
+  scale_color_manual(values = c("blue", "red")) +
+  geom_point(size=2) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = .50, vjust=0)) +
+  theme(axis.title = element_blank())+
+  xlim(-50, 50) +
+  theme(legend.position = "none") +
+  ggtitle("PF1 : PF3") +
+  theme(plot.title = element_text(hjust = 0.5))
+#e
+
+```
+
+```{r}
+#Rind PF2 vs PF3
+res = results(rdds, contrast = c("makefacility", "PF2", "PF3"))
+alpha = 0.01
+sigtab = res[which(res$padj < alpha), ]
+sigtab = cbind(as(sigtab, "data.frame"), as(tax_table(ps.asv)[rownames(sigtab), ], "matrix"))
+sigtab
+
+theme_set(theme_bw())
+x = tapply(sigtab$log2FoldChange, sigtab$Species, function(x) max(x))
+#x = sort(x, TRUE)
+sigtab$Species = factor(as.character(sigtab$Species), levels=names(x))
+f <- ggplot(sigtab, aes(x=log2FoldChange, y=Species, color= log2FoldChange > 2)) +
+  scale_color_manual(values = c("blue", "red")) +
+  geom_point(size=2) + 
+  theme(axis.text.x = element_text(angle = 0, hjust = .50, vjust=0)) +
+  theme(axis.title = element_blank())+
+  xlim(-50, 50) +
+  theme(legend.position = "none") +
+  ggtitle("PF2 : PF3") +
+  theme(plot.title = element_text(hjust = 0.5))
+#f
+
+```
+
+```{r, fig.height=8.5, fig.width=14}
+g <- cowplot::plot_grid(a, b, c, nrow = 1, ncol = 3, scale = 1, labels = "A", NULL, NULL)
+h <- cowplot::plot_grid(d, e, f, nrow = 1, ncol = 3, scale = 1, labels = "B", NULL, NULL)
+cowplot::plot_grid(g, h, nrow = 2, ncol = 1, scale = 1)
+```
+
+```{r sessioninfo}
+devtools::session_info()
+```
