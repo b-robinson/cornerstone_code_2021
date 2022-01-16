@@ -1,0 +1,556 @@
+---
+title: "cornerstone_sourcetracker_sankey_github"
+author: Benjamin Robinson
+output: html_notebook
+---
+
+```{r}
+# Library
+library(networkD3)
+library(dplyr)
+library(tidyverse)
+ 
+# A connection data frame is a list of flows with intensity for each flow
+##PF3 PASTE##
+links <- data.frame(
+  source=c("Curd","Unknown","Form","Curd", "Unknown","Paste1_D1", "Unknown", "Paste2_D1","Shelf2","Unknown", "Paste1_D60", "Paste2_D60", "Paste1_D120", "Unknown", "Paste2_D120"), 
+  target=c("Paste1_D1","Paste1_D1","Paste2_D1","Paste2_D1","Paste2_D1","Paste1_D60","Paste1_D60","Paste2_D60","Paste2_D60","Paste2_D60","Paste1_D120","Paste2_D120","Paste1_D180","Paste1_D180","Paste2_D180"), 
+  value=c(0.988,0.012,0.054,0.9435,0.0025,0.99,0.01,0.9335,0.005,0.0615,1,1,0.995,0.005,1)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+gg<- sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+             # LinkGroup = "source", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["Curd","Unknown","Form","Shelf2", "Paste1_D1", "Paste2_D1", "Paste1_D60", "Paste2_D60", "Paste1_D120", "Paste2_D120", "Paste1_D180", "Paste2_D180"])
+  .range(["green","grey","darkorange", "darkturquoise", "salmon", "thistle", "rosybrown", "violet","saddlebrown", "purple","sandybrown", "orchid"])'
+        ), 
+fontSize = 15, nodeWidth = 25, iterations = 100, nodePadding = 15)
+gg
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF3 MILK##
+links <- data.frame(
+  source=c("RawMilk","NMS","Maker","Milk+NMS","Coagulant"), 
+  target=c("Milk+NMS","Milk+NMS","Milk+NMS","Curd","Curd"), 
+  value=c(0.005,0.9945, 0.0005, .7005,.2995)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "source", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["RawMilk","NMS","Maker","Milk+NMS","Coagulant", "Curd"])
+  .range(["tomato","skyblue","gold","slategrey", "yellowgreen", "green"])'
+        ), 
+fontSize = 15, nodeWidth = 50, iterations = 100)
+
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r, fig.height=20, fig.width=15}
+# A connection data frame is a list of flows with intensity for each flow
+##PF3 RIND##
+links <- data.frame(
+  source=c("Curd", "Form", "Shelf1","Unknown","Fan1","Rind1_D1","Shelf1","Unknown","Fan1","Rind1_D60","Shelf1","Unknown", "Fan1", "Rind1_D120","Unknown","Curd","Shelf1", "Rind2_D1","Shelf2","Unknown","Rind2_D60","Shelf2","Unknown","Rind2_D120","Shelf2"), 
+  target=c("Rind1_D1","Rind1_D1","Rind1_D1","Rind1_D1","Rind1_D60","Rind1_D60","Rind1_D60","Rind1_D60","Rind1_D120","Rind1_D120","Rind1_D120","Rind1_D120","Rind1_D180","Rind1_D180","Rind1_D180","Rind2_D1","Rind2_D1","Rind2_D60","Rind2_D60","Rind2_D60","Rind2_D120","Rind2_D120","Rind2_D120","Rind2_D180","Rind2_D180"), 
+  value=c(0.9745,0.0045,0.0145,0.0065,0.41,0.27,0.23,0.08,0.1095,0.845,0.034,0.0115,0.106,0.88,0.014,0.967,0.033,0.538,0.108,0.354,0.912,0.0795,0.0085,0.782,0.218)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "target", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["RawMilk","NMS","Maker","Milk+NMS","Coagulant","Curd","Unknown","Fan1","Form","Table", "Shelf1", "Shelf2", "Rind1_D1", "Rind2_D1", "Rind1_D60", "Rind2_D60", "Rind1_D120", "Rind2_D120", "Rind1_D180", "Rind2_D180"])
+  .range(["tomato","skyblue","gold","slategrey","yellowgreen","green","grey","palegoldenrod","darkorange", "chocolate", "dodgerblue", "darkturquoise", "lightsalmon", "pink", "sienna", "magenta","navajowhite", "plum","peru", "hotpink"])'
+        ), 
+fontSize = 16, nodeWidth = 25, iterations = 100)
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF2 PASTE##
+links <- data.frame(
+  source=c("Curd","Form","Table","Unknown","Paste1_D1","Paste1_D60","Shelf1","Unknown","Paste1_D120","Curd","Unknown","Paste2_D1","Shelf2","Paste2_D60","Shelf2","Unknown","Paste2_D120"), 
+  target=c("Paste1_D1","Paste1_D1","Paste1_D1","Paste1_D1","Paste1_D60","Paste1_D120","Paste1_D120","Paste1_D120","Paste1_D180","Paste2_D1","Paste2_D1","Paste2_D60","Paste2_D60","Paste2_D120","Paste2_D120","Paste2_D120","Paste2_D180"), 
+  value=c(0.9595,0.02,0.001,0.0195,1,0.9885,0.002,0.0095,1,0.977,0.023,0.992,0.008,0.7285,0.2175,0.054,1)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+ff<- sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "target", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["Curd","Unknown","Maker","Form","Table", "Shelf1", "Shelf2", "Paste1_D1", "Paste2_D1", "Paste1_D60", "Paste2_D60", "Paste1_D120", "Paste2_D120", "Paste1_D180", "Paste2_D180"])
+  .range(["green","grey","gold","darkorange", "chocolate", "dodgerblue", "darkturquoise", "salmon", "thistle", "rosybrown", "violet","saddlebrown", "purple","sandybrown", "orchid"])'
+        ), 
+fontSize = 15, nodeWidth = 25, iterations = 100, nodePadding = 15)
+ff  
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF2 RIND##
+links <- data.frame(
+  source=c("Curd","Form","Shelf1","Unknown","Fan1","Rind1_D1","Shelf1","Unknown","Rind1_D60","Fan1","Rind1_D120","Shelf1","Unknown","Curd","Form","Shelf1","Unknown","Rind2_D1","Shelf2","Unknown","Rind2_D60","Shelf2","Unknown","Rind2_D120","Shelf2","Unknown"), 
+  target=c("Rind1_D1","Rind1_D1","Rind1_D1","Rind1_D1","Rind1_D60","Rind1_D60","Rind1_D60","Rind1_D60","Rind1_D120","Rind1_D180","Rind1_D180","Rind1_D180","Rind1_D180","Rind2_D1","Rind2_D1","Rind2_D1","Rind2_D1","Rind2_D60","Rind2_D60","Rind2_D60","Rind2_D120","Rind2_D120","Rind2_D120","Rind2_D180","Rind2_D180","Rind2_D180"), 
+  value=c(0.513,0.37,0.059,0.058,0.0425,0.598,0.356,0.0035,1,0.0265,0.8065,0.1615,0.0055,0.761,0.173,0.064,0.002,0.603,0.2805,0.1165,0.7795,0.211,0.0095,0.948,0.0455,0.0065)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "target", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["Curd","Unknown","Fan1","Form","Table", "Shelf1", "Shelf2", "Rind1_D1", "Rind2_D1", "Rind1_D60", "Rind2_D60", "Rind1_D120", "Rind2_D120", "Rind1_D180", "Rind2_D180"])
+  .range(["green","grey","palegoldenrod","darkorange", "chocolate", "dodgerblue", "darkturquoise", "lightsalmon", "pink", "sienna", "magenta","navajowhite", "plum","peru", "hotpink"])'
+        ), 
+fontSize = 15, nodeWidth = 25, iterations = 100)
+
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF2 MILK##
+links <- data.frame(
+  source=c("RawMilk","NMS","Maker","Milk+NMS","Maker"), 
+  target=c("Milk+NMS","Milk+NMS","Milk+NMS","Curd","Curd"), 
+  value=c(0.002,0.997,0.001,0.996,0.004)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "source", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["RawMilk","NMS","Maker","Milk+NMS","Curd"])
+  .range(["tomato","skyblue","gold","slategrey","green"])'
+        ), 
+fontSize = 15, nodeWidth = 50, iterations = 100)
+
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF1 PASTE##
+links <- data.frame(
+  source=c("Curd","Maker","Unknown","Paste1_D1","Unknown","Paste1_D60","Unknown","Paste1_D120","Unknown","Curd","Unknown","Paste2_D1","Shelf2","Unknown","Paste2_D60","Paste2_D120","Unknown"), 
+  target=c("Paste1_D1","Paste1_D1","Paste1_D1","Paste1_D60","Paste1_D60","Paste1_D120","Paste1_D120","Paste1_D180","Paste1_D180","Paste2_D1","Paste2_D1","Paste2_D60","Paste2_D60","Paste2_D60","Paste2_D120","Paste2_D180","Paste2_D180"), 
+  value=c(0.9565,0.003,0.0405,0.983,0.017,0.963,0.037,0.9905,0.0095,0.9895,0.0105,0.9915,0.0045,0.004,1,0.9945,0.0055)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+ee<- sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "source", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["Curd","Unknown","Maker","Shelf2", "Paste1_D1", "Paste2_D1", "Paste1_D60", "Paste2_D60", "Paste1_D120", "Paste2_D120", "Paste1_D180", "Paste2_D180"])
+  .range(["green","grey","gold","darkturquoise", "salmon", "thistle", "rosybrown", "violet","saddlebrown", "purple","sandybrown", "orchid"])'
+        ), 
+fontSize = 15, nodeWidth = 25, iterations = 100, nodePadding = 15)
+ee
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF1 MILK##
+links <- data.frame(
+  source=c("RawMilk","NMS","Unknown","Maker","Milk+NMS"), 
+  target=c("Milk+NMS","Milk+NMS","Milk+NMS","Curd","Curd"), 
+  value=c(0.0155,0.9815,0.003,0.003,0.997)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+
+# Make the Network
+sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "source", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["RawMilk","NMS","Unknown","Maker","Milk+NMS","Curd"])
+  .range(["tomato","skyblue","grey","gold","slategrey","green"])'
+        ), 
+fontSize = 15, nodeWidth = 50, iterations = 100)
+
+
+
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF1 RIND##
+links <- data.frame(
+  source=c("Curd","Maker","Shelf1","Unknown","Fan1","Rind1_D1","Shelf1","Unknown","Rind1_D60","Unknown","Rind1_D120","Unknown","Curd","Shelf1","Rind2_D1","Shelf2","Unknown", "Rind2_D60","Unknown","Rind2_D120","Shelf2","Unknown"), 
+  target=c("Rind1_D1","Rind1_D1","Rind1_D1","Rind1_D1","Rind1_D60","Rind1_D60","Rind1_D60","Rind1_D60","Rind1_D120","Rind1_D120","Rind1_D180","Rind1_D180","Rind2_D1","Rind2_D1","Rind2_D60","Rind2_D60","Rind2_D60","Rind2_D120","Rind2_D120","Rind2_D180","Rind2_D180","Rind2_D180"), 
+  value=c(0.9815,0.0005,0.006,0.012,0.053,0.2765,0.5925,0.078,0.985,0.015,0.994,0.006,0.999,0.001,0.7705,0.1525,0.077,0.995,0.005,0.7055,0.234,0.0605)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+# Make the Network
+sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "source", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["Curd","Unknown", "Maker", "Fan1","Form","Table", "Shelf1", "Shelf2", "Rind1_D1", "Rind2_D1", "Rind1_D60", "Rind2_D60", "Rind1_D120", "Rind2_D120", "Rind1_D180", "Rind2_D180"])
+  .range(["green","grey","gold", "palegoldenrod","darkorange", "chocolate", "dodgerblue", "darkturquoise", "lightsalmon", "pink", "sienna", "magenta","navajowhite", "plum","peru", "hotpink"])'
+        ), 
+fontSize = 15, nodeWidth = 25, iterations = 100)
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF3 ITS RIND##
+links <- data.frame(
+  source=c("Curd","Maker", "Shelf1", "Unknown",
+           "Rind1_D1", "Shelf1", "Maker",
+           "Fan1", "Rind1_D60", "Shelf1", "Unknown", 
+           "Rind1_D120", "Shelf1", "Unknown",
+           "Cloth", "Curd", "Maker", "Shelf1", "Unknown",
+           "Rind2_D1", "Unknown", 
+           "Rind2_D60", "Unknown", 
+           "Rind2_D120", "Unknown"), 
+  target=c("Rind1_D1","Rind1_D1", "Rind1_D1", "Rind1_D1", 
+           "Rind1_D60", "Rind1_D60", "Rind1_D60", 
+           "Rind1_D120", "Rind1_D120", "Rind1_D120", "Rind1_D120",
+           "Rind1_D180", "Rind1_D180", "Rind1_D180", 
+           "Rind2_D1", "Rind2_D1", "Rind2_D1", "Rind2_D1", "Rind2_D1", 
+           "Rind2_D60", "Rind2_D60", 
+           "Rind2_D120", "Rind2_D120", 
+           "Rind2_D180", "Rind2_D180"), 
+  value=c(0.6185, 0.1425, 0.1991, 0.0399,
+          0.6286, 0.0973, 0.2741, 
+          0.0103, 0.969, 0.0085, 0.0122,
+          0.2717, 0.7282, 0.0001, 
+          0.0001, 0.5347, 0.2432, 0.1419, 0.0801, 
+          0.419, 0.581, 
+          0.7389, 0.2611, 
+          0.3821, 0.6179)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "source", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["Curd","Unknown", "Maker", "Fan1","Form","Table", "Shelf1", "Shelf2", "Rind1_D1", "Rind2_D1", "Rind1_D60", "Rind2_D60", "Rind1_D120", "Rind2_D120", "Rind1_D180", "Rind2_D180"])
+  .range(["green","grey","gold", "palegoldenrod","darkorange", "chocolate", "dodgerblue", "darkturquoise", "lightsalmon", "pink", "sienna", "magenta","navajowhite", "plum","peru", "hotpink"])'
+        ), 
+fontSize = 15, nodeWidth = 25, iterations = 100)
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF2 ITS RIND##
+links <- data.frame(
+  source=c("Cloth", "Fan1", "Table", "Unknown",
+           "Fan1", "Rind1_D1", "Shelf1", "Unknown",
+           "Rind1_D60", "Unknown",
+           "Rind1_D120", "Shelf1", "Unknown",
+           "Cloth", "Fan1", "Shelf1", "Unknown",
+           "Rind2_D1", "Unknown",
+           "Rind2_D60", "Fan2", "Shelf2",
+           "Rind2_D120", "Shelf2", "Fan2", "Unknown"), 
+  target=c("Rind1_D1", "Rind1_D1", "Rind1_D1", "Rind1_D1",
+           "Rind1_D60", "Rind1_D60", "Rind1_D60", "Rind1_D60", 
+           "Rind1_D120", "Rind1_D120", 
+           "Rind1_D180", "Rind1_D180", "Rind1_D180", 
+           "Rind2_D1", "Rind2_D1", "Rind2_D1", "Rind2_D1", 
+           "Rind2_D60", "Rind2_D60", 
+           "Rind2_D120", "Rind2_D120", "Rind2_D120", 
+           "Rind2_D180", "Rind2_D180", "Rind2_D180", "Rind2_D180"), 
+  value=c(0.4937, 0.3628, 0.0365, 0.107,
+          0.0095, 0.9614, 0.0135, 0.0156, 
+          0.9992, 0.0008, 
+          0.8351, 0.0002, 0.1647, 
+          0.4686, 0.4299, 0.1012, 0.0003, 
+          0.9436, 0.0564, 
+          0.991, 0.0001, 0.0089, 
+          0.9605, 0.0045, 0.0008, 0.0342)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "source", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["Curd","Unknown", "Maker", "Fan1","Form","Table", "Shelf1", "Shelf2", "Rind1_D1", "Rind2_D1", "Rind1_D60", "Rind2_D60", "Rind1_D120", "Rind2_D120", "Rind1_D180", "Rind2_D180"])
+  .range(["green","grey","gold", "palegoldenrod","darkorange", "chocolate", "dodgerblue", "darkturquoise", "lightsalmon", "pink", "sienna", "magenta","navajowhite", "plum","peru", "hotpink"])'
+        ), 
+fontSize = 15, nodeWidth = 25, iterations = 100)
+
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r}
+# A connection data frame is a list of flows with intensity for each flow
+##PF1 ITS RIND##
+links <- data.frame(
+  source=c("Form", "Shelf1", "Table",
+           "Rind1_D1", "Shelf1", "Unknown",
+           "Rind1_D60", "Fan1", "Shelf1", "Unknown",
+           "Rind1_D120", "Fan1", "Shelf1", "Unknown",
+           "Form", "Shelf1", 
+           "Rind2_D1", "Unknown",
+           "Rind2_D60", "Shelf2", "Unknown",
+           "Rind2_D120", "Unknown", "Fan2", "Shelf2"), 
+  target=c("Rind1_D1", "Rind1_D1", "Rind1_D1",
+           "Rind1_D60", "Rind1_D60", "Rind1_D60",
+           "Rind1_D120", "Rind1_D120", "Rind1_D120", "Rind1_D120",
+           "Rind1_D180", "Rind1_D180", "Rind1_D180", "Rind1_D180",
+           "Rind2_D1", "Rind2_D1",
+           "Rind2_D60", "Rind2_D60",
+           "Rind2_D120", "Rind2_D120", "Rind2_D120",
+           "Rind2_D180", "Rind2_D180", "Rind2_D180", "Rind2_D180"), 
+  value=c(0.6623, 0.3138, 0.0239,
+          0.0567, 0.9042, 0.0391,
+          0.8694, 0.0061, 0.1105, 0.014,
+          0.73, 0.0093, 0.2607, 0,
+          0.0488, 0.9512,
+          0.9598, 0.0402,
+          0.9432, 0.0513, 0.0055,
+          0.9851, 0.0122, 0.0026, 0.0001)
+  )
+ 
+# From these flows we need to create a node data frame: it lists every entities involved in the flow
+nodes <- data.frame(
+  name=c(as.character(links$source), 
+  as.character(links$target)) %>% unique()
+)
+ 
+# With networkD3, connection must be provided using id, not using real name like in the links dataframe.. So we need to reformat it.
+links$IDsource <- match(links$source, nodes$name)-1 
+links$IDtarget <- match(links$target, nodes$name)-1
+ 
+sankeyNetwork(Links = links, 
+              Nodes = nodes,
+              Source = "IDsource", 
+              Target = "IDtarget",
+              Value = "value", 
+              NodeID = "name", 
+              sinksRight=FALSE, 
+              #LinkGroup = "source", 
+              colourScale = JS(
+            'd3.scaleOrdinal()  
+  .domain(["Curd","Unknown", "Maker", "Fan1","Form","Table", "Shelf1", "Shelf2", "Rind1_D1", "Rind2_D1", "Rind1_D60", "Rind2_D60", "Rind1_D120", "Rind2_D120", "Rind1_D180", "Rind2_D180"])
+  .range(["green","grey","gold", "palegoldenrod","darkorange", "chocolate", "dodgerblue", "darkturquoise", "lightsalmon", "pink", "sienna", "magenta","navajowhite", "plum","peru", "hotpink"])'
+        ), 
+fontSize = 15, nodeWidth = 25, iterations = 100)
+
+# save the widget
+# library(htmlwidgets)
+# saveWidget(p, file=paste0( getwd(), "/HtmlWidget/sankeyBasic1.html"))
+```
+
+```{r sessioninfo}
+devtools::session_info()
+```
+
+
+
