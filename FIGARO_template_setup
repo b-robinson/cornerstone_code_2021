@@ -1,10 +1,3 @@
-git clone https://github.com/Zymo-Research/figaro.git
-cd figaro
-# depending on your system configuration, the following commands
-# are either python3/pip3 or python/pip
-python3 setup.py bdist_wheel
-pip3 install --force-reinstall dist/*.whl
-figaro -i /path/to/fastq/directory -o /path/to/output/files -a [amplicon length] \
-    -f [forward primer length] -r [reverse primer length]
 # i ran the following
 python3 figaro.py -i /path/to/fastq/directory -o /path/to/output/files -a 450 -f 20 -r 20
+#from here, just select the best option; see creators git for more details
