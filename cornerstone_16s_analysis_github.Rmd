@@ -16,16 +16,17 @@ opts_chunk$set(message = FALSE, error = FALSE, warning = FALSE,
 ```{r, message=FALSE, warning=FALSE}
 library("knitr")
 library("BiocStyle")
-.cran_packages <- c("ggplot2", "gridExtra")
-.bioc_packages <- c("dada2", "phyloseq", "DECIPHER", "phangorn")
+.cran_packages <- c("ggplot2", "gridExtra","tidyverse","RColorBrewer","pheatmap","ggrepel","dendextend","virdis","reshape")
+.bioc_packages <- c("dada2", "phyloseq", "DECIPHER", "phangorn","DESeq2","microbiome","philr","ape")
 .inst <- .cran_packages %in% installed.packages()
 if(any(!.inst)) {
    install.packages(.cran_packages[!.inst])
 }
 .inst <- .bioc_packages %in% installed.packages()
 if(any(!.inst)) {
-   source("http://bioconductor.org/biocLite.R")
-   biocLite(.bioc_packages[!.inst], ask = F)
+   if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+  BiocManager::install(.bioc_packages[!.inst], ask = F)
 }
 # Load packages into session, and print package version
 sapply(c(.cran_packages, .bioc_packages), require, character.only = TRUE)
@@ -175,7 +176,7 @@ ps.melt2 <- ps.melt
 ps.melt3 <- ps.melt
 ps.melt4 <- ps.melt
 ps.melt5 <- ps.melt
-#below is the absolutely digusting manner by which I was able to merge taxa into an "other" group strictly for visualization purposes. I specifically did this on the melt object only, since this is only used for ggplot bargraphs in this workflow. no stats were or should be run on data after doing this
+#below is the absolutely disgusting manner by which I was able to merge taxa into an "other" group strictly for visualization purposes. I specifically did this on the melt object only, since this is only used for ggplot bargraphs in this workflow. no stats were or should be run on data after doing this
 #ps.melt$Species[ps.melt$Abundance < 0.01] <- "< 1% abund."
 
 ps.melt$Species[((ps.melt$Species != "Streptococcus_thermophilus"))&
